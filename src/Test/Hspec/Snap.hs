@@ -11,7 +11,7 @@ import           Control.Applicative     ((<$>))
 import           Control.Concurrent.MVar
 import           Control.Exception       (SomeException, catch)
 import           Control.Monad.State     (StateT (..), runStateT)
-import qualified Control.Monad.State     as S (get)
+import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
 import qualified Data.Map                as M
 import           Data.Maybe              (fromMaybe)
@@ -30,16 +30,17 @@ import           Test.Hspec.Core
 
 data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty deriving (Show, Eq)
 
-data SnapState b = SnapState (Handler b b ()) (Snaplet b) (InitializerState b)
+data SnapState b = SnapState Result (Handler b b ()) (Snaplet b) (InitializerState b)
 
 type SnapTest b = StateT (SnapState b) IO
 
-instance Example (SnapTest b Result) where
-  type Arg (SnapTest b Result) = SnapState b
-  evaluateExample s _ cb _ = do mv <- newEmptyMVar
-                                cb $ \st -> do (r,_) <- runStateT s st
-                                               putMVar mv r
-                                takeMVar mv
+instance Example (SnapTest b ()) where
+  type Arg (SnapTest b ()) = SnapState b
+  evaluateExample s _ cb _ =
+    do mv <- newEmptyMVar
+       cb $ \st@(SnapState _ _ _ _) -> do ((),(SnapState r' _ _ _)) <- runStateT s st
+                                          putMVar mv r'
+       takeMVar mv
 
 afterAll :: IO () -> SpecWith a -> SpecWith a
 afterAll action = go
@@ -69,26 +70,34 @@ snap site app spec = do
   case init of
     Left err -> error $ show err
     Right (snaplet, initstate) -> do
-      afterAll (closeSnaplet initstate) $ before (return (SnapState site snaplet initstate)) spec
+      afterAll (closeSnaplet initstate) $
+        before (return (SnapState Success site snaplet initstate)) spec
 
 get :: Text -> SnapTest b TestResponse
 get path = runRequest (Test.get (T.encodeUtf8 path) M.empty)
 
-should200 :: TestResponse -> SnapTest b Result
-should200 (Html _) = return Success
-should200 (Other 200) = return Success
-should200 r = return (Fail (show r))
+setResult :: Result -> SnapTest b ()
+setResult r = do (SnapState r' s a i) <- S.get
+                 case r' of
+                   Success -> S.put (SnapState r s a i)
+                   Fail msg -> return ()
 
-shouldNot200 :: TestResponse -> SnapTest b Result
-shouldNot200 (Html _) = return (Fail "Got Html back.")
-shouldNot200 (Other 200) = return (Fail "Got Other with 200 back.")
-shouldNot200 r = return Success
+
+should200 :: TestResponse -> SnapTest b ()
+should200 (Html _) = setResult Success
+should200 (Other 200) = setResult Success
+should200 r = setResult (Fail (show r))
+
+shouldNot200 :: TestResponse -> SnapTest b ()
+shouldNot200 (Html _) = setResult (Fail "Got Html back.")
+shouldNot200 (Other 200) = setResult (Fail "Got Other with 200 back.")
+shouldNot200 r = setResult Success
 
 -- Internal helpers
 
 runRequest :: RequestBuilder IO () -> SnapTest b TestResponse
 runRequest req = do
-  (SnapState site app is) <- S.get
+  (SnapState res site app is) <- S.get
   res <- liftIO $ runHandlerSafe req site app is
   case res of
     Left err -> do
