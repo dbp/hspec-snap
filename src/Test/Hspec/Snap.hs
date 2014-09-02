@@ -9,20 +9,33 @@ module Test.Hspec.Snap where
 
 import           Control.Applicative     ((<$>))
 import           Control.Concurrent.MVar
-import           Control.Monad.State     (StateT (..), get, runStateT)
+import           Control.Exception       (SomeException, catch)
+import           Control.Monad.State     (StateT (..), runStateT)
+import qualified Control.Monad.State     as S (get)
 import           Control.Monad.Trans     (liftIO)
+import qualified Data.Map                as M
+import           Data.Maybe              (fromMaybe)
 import           Data.Text               (Text)
+import qualified Data.Text               as T
+import qualified Data.Text.Encoding      as T
+import           Snap
+import           Snap.Core               (Response (..), getHeader)
+import           Snap.Snaplet            (Handler, Snaplet, SnapletInit)
+import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
+                                          evalHandler', getSnaplet, runHandler')
+import           Snap.Test               (RequestBuilder, getResponseBody)
+import qualified Snap.Test               as Test
 import           Test.Hspec
 import           Test.Hspec.Core
 
-data TestResponse = Html | NotFound
+data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty deriving (Show, Eq)
 
-data SnapTest = SnapTest Int deriving Show
+data SnapState b = SnapState (Handler b b ()) (Snaplet b) (InitializerState b)
 
-type SnapState = StateT SnapTest IO
+type SnapTest b = StateT (SnapState b) IO
 
-instance Example (SnapState Result) where
-  type Arg (SnapState Result) = SnapTest
+instance Example (SnapTest b Result) where
+  type Arg (SnapTest b Result) = SnapState b
   evaluateExample s _ cb _ = do mv <- newEmptyMVar
                                 cb $ \st -> do (r,_) <- runStateT s st
                                                putMVar mv r
@@ -35,7 +48,6 @@ afterAll action = go
                      let specs = map snd res
                      let count = foldr (+) 0 (map fst res)
                      mvar <- runIO $ newMVar count
-                     runIO $ print ("found this many specs: ", count)
                      after (\_ -> cleanup mvar) (fromSpecList specs)
         countFlatten :: SpecTree a -> IO (Int, SpecTree a)
         countFlatten (SpecGroup s t) =
@@ -47,23 +59,65 @@ afterAll action = go
         countFlatten (SpecItem s i) = return (1, SpecItem s i)
         joinCount :: [(Int, b)] -> (Int, [b])
         joinCount = foldr (\(a,b) (c,d) -> (a + c, b:d)) (0, [])
-        cleanup mv = modifyMVar mv $ \v -> do print ("count is ", v)
-                                              if v == 1
-                                                 then action >>= return . (v,)
-                                                 else return (v - 1, ())
+        cleanup mv = modifyMVar mv $ \v -> if v == 1
+                                              then action >>= return . (v,)
+                                              else return (v - 1, ())
 
-snap :: IO SnapTest -> SpecWith SnapTest -> Spec
-snap app spec = do
-  st <- runIO app
-  afterAll (cleanup st) $ before (return st) spec
-  where cleanup (SnapTest i) = print ("cleaning up ", i)
+snap :: Handler b b () -> SnapletInit b b -> SpecWith (SnapState b) -> Spec
+snap site app spec = do
+  init <- runIO $ getSnaplet (Just "test") app
+  case init of
+    Left err -> error $ show err
+    Right (snaplet, initstate) -> do
+      afterAll (closeSnaplet initstate) $ before (return (SnapState site snaplet initstate)) spec
 
-getRequest :: Text -> SnapState TestResponse
-getRequest "valid" = do s <- get
-                        liftIO $ print ("running get with state ", s)
-                        return Html
-getRequest _ = return NotFound
+get :: Text -> SnapTest b TestResponse
+get path = runRequest (Test.get (T.encodeUtf8 path) M.empty)
 
-should200 :: TestResponse -> SnapState Result
-should200 Html = return Success
-should200 NotFound = return (Fail "Not found")
+should200 :: TestResponse -> SnapTest b Result
+should200 (Html _) = return Success
+should200 (Other 200) = return Success
+should200 r = return (Fail (show r))
+
+shouldNot200 :: TestResponse -> SnapTest b Result
+shouldNot200 (Html _) = return (Fail "Got Html back.")
+shouldNot200 (Other 200) = return (Fail "Got Other with 200 back.")
+shouldNot200 r = return Success
+
+-- Internal helpers
+
+runRequest :: RequestBuilder IO () -> SnapTest b TestResponse
+runRequest req = do
+  (SnapState site app is) <- S.get
+  res <- liftIO $ runHandlerSafe req site app is
+  case res of
+    Left err -> do
+      error $ T.unpack err
+    Right response -> do
+      case rspStatus response of
+        404 -> return NotFound
+        200 -> do
+          body <- liftIO $ getResponseBody response
+          return $ Html $ T.decodeUtf8 body
+        _ -> if (rspStatus response) >= 300 && (rspStatus response) < 400
+                then do let url = fromMaybe "" $ getHeader "Location" response
+                        return (Redirect (rspStatus response) (T.decodeUtf8 url))
+                else return (Other (rspStatus response))
+
+
+
+
+runHandlerSafe :: RequestBuilder IO ()
+               -> Handler b b v
+               -> Snaplet b
+               -> InitializerState b
+               -> IO (Either Text Response)
+runHandlerSafe req site s is =
+  catch (runHandler' s is req site) (\(e::SomeException) -> return $ Left (T.pack $ show e))
+
+evalHandlerSafe :: Handler b b v
+                -> Snaplet b
+                -> InitializerState b
+                -> IO (Either Text v)
+evalHandlerSafe act s is =
+  catch (evalHandler' s is (Test.get "" M.empty) act) (\(e::SomeException) -> return $ Left (T.pack $ show e))
