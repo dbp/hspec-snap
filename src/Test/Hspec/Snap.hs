@@ -27,6 +27,8 @@ import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
 import           Test.Hspec.Core
+import qualified Text.HandsomeSoup       as HS
+import qualified Text.XML.HXT.Core       as HXT
 
 data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty deriving (Show, Eq)
 
@@ -92,6 +94,47 @@ shouldNot200 :: TestResponse -> SnapTest b ()
 shouldNot200 (Html _) = setResult (Fail "Got Html back.")
 shouldNot200 (Other 200) = setResult (Fail "Got Other with 200 back.")
 shouldNot200 r = setResult Success
+
+should404 :: TestResponse -> SnapTest b ()
+should404 NotFound = setResult Success
+should404 r = setResult (Fail (show r))
+
+shouldNot404 :: TestResponse -> SnapTest b ()
+shouldNot404 NotFound = setResult (Fail "Got NotFound back.")
+shouldNot404 r = setResult Success
+
+should300 :: TestResponse -> SnapTest b ()
+should300 (Redirect _ _) = setResult Success
+should300 r = setResult (Fail (show r))
+
+shouldNot300 :: TestResponse -> SnapTest b ()
+shouldNot300 (Redirect _ _) = setResult (Fail "Got Redirect back.")
+shouldNot300 r = setResult Success
+
+should300To :: Text -> TestResponse -> SnapTest b ()
+should300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult Success
+should300To _ r = setResult (Fail (show r))
+
+shouldNot300To :: Text -> TestResponse -> SnapTest b ()
+shouldNot300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult (Fail "Got Redirect back.")
+shouldNot300To _ r = setResult Success
+
+shouldHaveSelector :: TestResponse -> Text -> SnapTest b ()
+shouldHaveSelector (Html body) selector =
+  case HXT.runLA (HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body)  of
+    [] -> setResult (Fail msg)
+    _ -> setResult Success
+  where msg = (T.unpack $ T.concat ["Html contains selector: ", selector, "\n\n", body])
+haveSelector _ match = setResult (Fail (T.unpack $ T.concat ["Body contains css selector: ", match]))
+
+shouldHaveText :: TestResponse -> Text -> SnapTest b ()
+shouldHaveText (Html body) match =
+  if T.isInfixOf match body
+  then setResult Success
+
+  else setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
+shouldHaveText _ match = setResult (Fail (T.unpack $ T.concat ["Body contains: ", match]))
+
 
 -- Internal helpers
 

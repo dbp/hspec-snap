@@ -59,12 +59,12 @@ app mv = makeSnaplet "app" "An snaplet example application." Nothing $ do
 
 tests :: MVar () -> Spec
 tests mv = snap (route routes) (app mv) $ do
-             -- p <- get "/test"
-             -- it "should match selector from a GET request" $ do
-             --   p `shouldHaveSelector` "table td"
-             --   p `shouldNotHaveSelector` "table td.doesntexist"
-             --   get "/redirect" >>= flip shouldNotHaveSelector "table td.doesntexist"
-             --   get "/invalid_url" >>= flip shouldNotHaveSelector "table td.doesntexist"
+             it "should match selector from a GET request" $ do
+               p <- get "/test"
+               p `shouldHaveSelector` "table td"
+               -- p `shouldNotHaveSelector` "table td.doesntexist"
+               -- get "/redirect" >>= flip shouldNotHaveSelector "table td.doesntexist"
+               -- get "/invalid_url" >>= flip shouldNotHaveSelector "table td.doesntexist"
              -- it "should not match <html> on POST request" $
              --   post "/test" M.empty >>= flip shouldNotHaveText "<html>"
              -- it "should post parameters" $ do
@@ -75,16 +75,16 @@ tests mv = snap (route routes) (app mv) $ do
              it "status code 200" $ do
                get "/test" >>= should200
                get "/invalid_url" >>= shouldNot200
-             -- it "status code 404" $ do
-             --   get "/test" >>= shouldNot404
-             --   get "/invalid_url" >>= should404
-             -- it "status code 3**" $ do
-             --   get "/redirect" >>= should300
-             --   get "/test" >>= shouldNot300
-             -- it "status code 3** with target" $ do
-             --   get "/redirect" >>= flip should300To "/test"
-             --   get "/redirect" >>= flip shouldNot300To "/redirect"
-             --   get "/test" >>= flip shouldNot300To "/redirect"
+             it "status code 404" $ do
+               get "/test" >>= shouldNot404
+               get "/invalid_url" >>= should404
+             it "status code 3**" $ do
+               get "/redirect" >>= should300
+               get "/test" >>= shouldNot300
+             it "status code 3** with target" $ do
+               get "/redirect" >>= should300To "/test"
+               get "/redirect" >>= shouldNot300To "/redirect"
+               get "/test" >>= shouldNot300To "/redirect"
              -- it "should reflect stateful changes" $ do
              --   let isE = use mv >>= \m -> liftIO $ isEmptyMVar m
              --   cleanup (use mv >>= \m -> void $ liftIO $ tryTakeMVar m) $ do
