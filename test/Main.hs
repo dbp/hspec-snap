@@ -20,7 +20,8 @@ import           Snap                    (Handler, Method (..), SnapletInit,
                                           writeBS, writeText)
 import qualified Snap
 
-import           Control.Concurrent.MVar (MVar, newEmptyMVar, tryPutMVar)
+import           Control.Concurrent.MVar (MVar, isEmptyMVar, newEmptyMVar,
+                                          tryPutMVar, tryTakeMVar)
 import           Test.Hspec
 import           Test.Hspec.Snap
 
@@ -68,8 +69,9 @@ tests mvar = snap (route routes) (app mvar) $ do
                it "should post parameters" $ do
                  post "/params" (params [("q", "hello")]) >>= flip shouldHaveText "hello"
                  post "/params" (params [("r", "hello")]) >>= flip shouldNotHaveText "hello"
-               it "basic equality" $
+               it "basic equality" $ do
                  eval (return 1) >>= shouldEqual 1
+                 shouldNotEqual 1 2
                it "status code 200" $ do
                  get "/test" >>= should200
                  get "/invalid_url" >>= shouldNot200
@@ -83,13 +85,18 @@ tests mvar = snap (route routes) (app mvar) $ do
                  get "/redirect" >>= should300To "/test"
                  get "/redirect" >>= shouldNot300To "/redirect"
                  get "/test" >>= shouldNot300To "/redirect"
-               -- it "should reflect stateful changes" $ do
-               --   let isE = use mv >>= \m -> liftIO $ isEmptyMVar m
-               --   cleanup (use mv >>= \m -> void $ liftIO $ tryTakeMVar m) $ do
-               --     should $ equal <$> eval isE <*> val True
-               --     changes not isE $ post "/setmv" M.empty
-               --     changes id isE $ post "/setmv" M.empty
-               --   should $ equal <$> eval isE <*> val True
+               describe "stateful changes" $ do
+                 let isE = use mv >>= \m -> liftIO $ isEmptyMVar m
+                 after (\_ -> void $ tryTakeMVar mvar) $
+                   it "should reflect stateful in handler" $ do
+                    eval isE >>= shouldEqual True
+                    post "/setmv" M.empty
+                    eval isE >>= shouldEqual False
+                    post "/setmv" M.empty
+                    eval isE >>= shouldEqual False
+                    eval (use mv >>= \m -> void $ liftIO $ tryTakeMVar m)
+                 it "cleans up" $ eval isE >>= shouldEqual True
+
 
 ----------------------------------------------------------
 -- Section 3: Code to interface with cabal test.        --
