@@ -31,7 +31,7 @@ library
 
 Test-Suite test-hspec-snap
     type:       exitcode-stdio-1.0
-    hs-source-dirs: test
+    hs-source-dirs: spec
     main-is: Main.hs
     build-depends:     base >= 4.6 && < 4.8,
                        mtl >= 2 && < 3,
