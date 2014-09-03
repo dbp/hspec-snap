@@ -15,34 +15,36 @@ library
   exposed-modules:
         Test.Hspec.Snap
   hs-source-dirs: src
-  build-depends:       base >= 4.6 && < 4.8,
-                       mtl >= 2 && < 3,
-                       transformers == 0.3.*,
-                       text >= 0.11 && < 1.2,
-                       hspec2 >= 0.4 && < 0.5,
-                       containers,
-                       snap,
-                       snap-core,
-                       bytestring,
-                       lens,
-                       HandsomeSoup,
-                       hxt
+  build-depends:       HandsomeSoup
+                     , base >= 4.6 && < 4.8
+                     , bytestring
+                     , containers
+                     , digestive-functors
+                     , hspec2 >= 0.4 && < 0.5
+                     , hxt
+                     , lens
+                     , mtl >= 2 && < 3
+                     , snap
+                     , snap-core
+                     , text >= 0.11 && < 1.2
+                     , transformers == 0.3.*
 
 
 Test-Suite test-hspec-snap
     type:       exitcode-stdio-1.0
     hs-source-dirs: spec
     main-is: Main.hs
-    build-depends:     base >= 4.6 && < 4.8,
-                       mtl >= 2 && < 3,
-                       transformers == 0.3.*,
-                       text >= 0.11 && < 1.2,
-                       hspec2 >= 0.4 && < 0.5,
-                       containers,
-                       snap,
-                       snap-core,
-                       bytestring,
-                       lens,
-                       HandsomeSoup,
-                       hxt
+    build-depends:     HandsomeSoup
+                     , base >= 4.6 && < 4.8
+                     , bytestring
+                     , containers
+                     , digestive-functors
+                     , hspec2 >= 0.4 && < 0.5
+                     , hxt
+                     , lens
+                     , mtl >= 2 && < 3
+                     , snap
+                     , snap-core
+                     , text >= 0.11 && < 1.2
+                     , transformers == 0.3.*
     build-depends: hspec-snap == 0.1.0.0

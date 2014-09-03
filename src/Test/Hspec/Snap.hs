@@ -5,7 +5,58 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Test.Hspec.Snap where
+module Test.Hspec.Snap (
+  -- * Types
+    TestResponse(..)
+  , SnapHspecState(..)
+  , SnapHspecM
+
+  -- * Running tests
+  , snap
+
+  -- * General helpers
+  , afterAll
+
+  -- * Requests
+  , get
+  , get'
+  , post
+  , params
+
+  -- * Evaluating handlers
+  , eval
+
+  -- * Unit test assertions
+  , shouldEqual
+  , shouldNotEqual
+  , shouldBeTrue
+  , shouldNotBeTrue
+
+  -- * Response assertions
+  , should200
+  , shouldNot200
+  , should404
+  , shouldNot404
+  , should300
+  , shouldNot300
+  , should300To
+  , shouldNot300To
+  , shouldHaveSelector
+  , shouldNotHaveSelector
+  , shouldHaveText
+  , shouldNotHaveText
+
+  -- * Form tests
+  , FormExpectations(..)
+  , form
+
+
+  -- * Internal helpers (not guaranteed to remain present in API)
+  , setResult
+  , runRequest
+  , runHandlerSafe
+  , evalHandlerSafe
+  ) where
 
 import           Control.Applicative     ((<$>))
 import           Control.Concurrent.MVar (modifyMVar, newEmptyMVar, newMVar,
@@ -29,6 +80,7 @@ import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
 import           Test.Hspec.Core
+import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
 import qualified Text.XML.HXT.Core       as HXT
 
@@ -118,6 +170,15 @@ shouldNotEqual a b = if a == b
                          then setResult (Fail ("Should not have held: " ++ show a ++ " == " ++ show b))
                          else setResult Success
 
+shouldBeTrue :: Bool
+             -> SnapHspecM b ()
+shouldBeTrue True = setResult Success
+shouldBeTrue False = setResult (Fail "Value should have been True.")
+
+shouldNotBeTrue :: Bool
+                 -> SnapHspecM b ()
+shouldNotBeTrue False = setResult Success
+shouldNotBeTrue True = setResult (Fail "Value should have been True.")
 
 should200 :: TestResponse -> SnapHspecM b ()
 should200 (Html _) = setResult Success
@@ -189,6 +250,31 @@ shouldNotHaveText (Html body) match =
   then setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
   else setResult Success
 shouldNotHaveText _ _ = setResult Success
+
+
+-- | A data type for tests against forms.
+data FormExpectations a = Value a           -- ^ The value the form should take (and should be valid)
+                        | ErrorPaths [Text] -- ^ The error paths that should be populated
+
+-- | Test against digestive-functors forms.
+form :: (Eq a, Show a)
+     => FormExpectations a           -- ^ If the form should succeed, Value a is what it should produce.
+                                     --   If failing, ErrorPaths should be all the errors that are triggered.
+     -> DF.Form Text (Handler b b) a -- ^ The form to run
+     -> M.Map Text Text                -- ^ The parameters to pass
+     -> SnapHspecM b ()
+form expected theForm theParams =
+  do r <- eval $ DF.postForm "form" theForm (const $ return lookupParam)
+     case expected of
+       Value a -> shouldEqual (snd r) (Just a)
+       ErrorPaths expectedPaths ->
+         do let viewErrorPaths = map (DF.fromPath . fst) $ DF.viewErrors $ fst r
+            shouldBeTrue (all (`elem` viewErrorPaths) expectedPaths
+                          && (length viewErrorPaths == length expectedPaths))
+  where lookupParam pth = case M.lookup (DF.fromPath pth) fixedParams of
+                            Nothing -> return []
+                            Just v -> return [DF.TextInput v]
+        fixedParams = M.mapKeys (T.append "form.") theParams
 
 -- Internal helpers
 
