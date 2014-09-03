@@ -120,21 +120,41 @@ shouldNot300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult (Fail "Go
 shouldNot300To _ r = setResult Success
 
 shouldHaveSelector :: TestResponse -> Text -> SnapTest b ()
-shouldHaveSelector (Html body) selector =
+shouldHaveSelector r@(Html body) selector =
+  setResult $ if haveSelector' r selector
+                then Success
+                else (Fail msg)
+  where msg = (T.unpack $ T.concat ["Html should have contained selector: ", selector, "\n\n", body])
+shouldHaveSelector _ match = setResult (Fail (T.unpack $ T.concat ["Non-HTML body should have contained css selector: ", match]))
+
+shouldNotHaveSelector :: TestResponse -> Text -> SnapTest b ()
+shouldNotHaveSelector r@(Html body) selector =
+  setResult $ if haveSelector' r selector
+                then (Fail msg)
+                else Success
+  where msg = (T.unpack $ T.concat ["Html should not have contained selector: ", selector, "\n\n", body])
+shouldNotHaveSelector _ _ = setResult Success
+
+haveSelector' :: TestResponse -> Text -> Bool
+haveSelector' (Html body) selector =
   case HXT.runLA (HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body)  of
-    [] -> setResult (Fail msg)
-    _ -> setResult Success
-  where msg = (T.unpack $ T.concat ["Html contains selector: ", selector, "\n\n", body])
-haveSelector _ match = setResult (Fail (T.unpack $ T.concat ["Body contains css selector: ", match]))
+    [] -> False
+    _ -> True
+haveSelector' _ _ = False
 
 shouldHaveText :: TestResponse -> Text -> SnapTest b ()
 shouldHaveText (Html body) match =
   if T.isInfixOf match body
   then setResult Success
-
   else setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
 shouldHaveText _ match = setResult (Fail (T.unpack $ T.concat ["Body contains: ", match]))
 
+shouldNotHaveText :: TestResponse -> Text -> SnapTest b ()
+shouldNotHaveText (Html body) match =
+  if T.isInfixOf match body
+  then setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
+  else setResult Success
+shouldNotHaveText _ _ = setResult Success
 
 -- Internal helpers
 

@@ -62,9 +62,9 @@ tests mv = snap (route routes) (app mv) $ do
              it "should match selector from a GET request" $ do
                p <- get "/test"
                p `shouldHaveSelector` "table td"
-               -- p `shouldNotHaveSelector` "table td.doesntexist"
-               -- get "/redirect" >>= flip shouldNotHaveSelector "table td.doesntexist"
-               -- get "/invalid_url" >>= flip shouldNotHaveSelector "table td.doesntexist"
+               p `shouldNotHaveSelector` "table td.doesntexist"
+               get "/redirect" >>= flip shouldNotHaveSelector "table td.doesntexist"
+               get "/invalid_url" >>= flip shouldNotHaveSelector "table td.doesntexist"
              -- it "should not match <html> on POST request" $
              --   post "/test" M.empty >>= flip shouldNotHaveText "<html>"
              -- it "should post parameters" $ do
