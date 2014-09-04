@@ -1,6 +1,6 @@
 name:                hspec-snap
 version:             0.1.0.0
-synopsis:            A library for BDD-style testing with the Snap Web Framework
+synopsis:            A library for testing with Hspec and the Snap Web Framework
 homepage:            https://github.com/dbp/hspec-snap
 license:             BSD3
 license-file:        LICENSE
@@ -15,36 +15,36 @@ library
   exposed-modules:
         Test.Hspec.Snap
   hs-source-dirs: src
-  build-depends:       HandsomeSoup
-                     , base >= 4.6 && < 4.8
-                     , bytestring
-                     , containers
-                     , digestive-functors
+  build-depends:       base >= 4.6 && < 4.8
+                     , bytestring >= 0.9 && < 0.11
+                     , containers >= 0.4 && < 0.6
+                     , digestive-functors >= 0.7 && < 0.8
                      , hspec2 >= 0.4 && < 0.5
-                     , hxt
-                     , lens
+                     , hxt >= 9.3 && < 9.4
+                     , HandsomeSoup >= 0.3 && < 0.4
+                     , lens >= 3.10 && < 4.5
                      , mtl >= 2 && < 3
-                     , snap
-                     , snap-core
+                     , snap >= 0.13 && < 0.14
+                     , snap-core >= 0.9 && < 0.10
                      , text >= 0.11 && < 1.2
-                     , transformers == 0.3.*
+                     , transformers >= 0.3 && < 0.4
 
 
 Test-Suite test-hspec-snap
     type:       exitcode-stdio-1.0
     hs-source-dirs: spec
     main-is: Main.hs
-    build-depends:     HandsomeSoup
-                     , base >= 4.6 && < 4.8
-                     , bytestring
-                     , containers
-                     , digestive-functors
+    build-depends:     base >= 4.6 && < 4.8
+                     , bytestring >= 0.9 && < 0.11
+                     , containers >= 0.4 && < 0.6
+                     , digestive-functors >= 0.7 && < 0.8
                      , hspec2 >= 0.4 && < 0.5
-                     , hxt
-                     , lens
+                     , hxt >= 9.3 && < 9.4
+                     , HandsomeSoup >= 0.3 && < 0.4
+                     , lens >= 3.10 && < 4.5
                      , mtl >= 2 && < 3
-                     , snap
-                     , snap-core
+                     , snap >= 0.13 && < 0.14
+                     , snap-core >= 0.9 && < 0.10
                      , text >= 0.11 && < 1.2
-                     , transformers == 0.3.*
+                     , transformers >= 0.3 && < 0.4
     build-depends: hspec-snap == 0.1.0.0
