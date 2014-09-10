@@ -8,6 +8,10 @@
 module Test.Hspec.Snap (
   -- * Running blocks of hspec-snap tests
     snap
+  , modifySite
+  , modifySite'
+  , afterEval
+  , beforeEval
 
   -- * Core data types
   , TestResponse(..)
@@ -22,10 +26,14 @@ module Test.Hspec.Snap (
   , post
   , params
 
+  -- * Helpers for dealing with TestResponses
+  , restrictResponse
+
   -- * Evaluating application code
   , eval
 
   -- * Unit test assertions
+  , shouldChange
   , shouldEqual
   , shouldNotEqual
   , shouldBeTrue
@@ -62,6 +70,7 @@ import           Control.Applicative     ((<$>))
 import           Control.Concurrent.MVar (modifyMVar, newEmptyMVar, newMVar,
                                           putMVar, takeMVar)
 import           Control.Exception       (SomeException, catch)
+import           Control.Monad           (void)
 import           Control.Monad.State     (StateT (..), runStateT)
 import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
@@ -145,6 +154,34 @@ snap site app spec = do
       afterAll (closeSnaplet initstate) $
         before (return (SnapHspecState Success site snaplet initstate)) spec
 
+-- | This allows you to change the default handler you are running
+-- requests against within a block. This is most likely useful for
+-- setting request state (for example, logging a user in).
+modifySite :: (Handler b b () -> Handler b b ())
+           -> SpecWith (SnapHspecState b)
+           -> SpecWith (SnapHspecState b)
+modifySite f = beforeWith (\(SnapHspecState r site snaplet initst) ->
+                             return (SnapHspecState r (f site) snaplet initst))
+
+-- | This performs a similar operation to `modifySite` but in the context
+-- of `SnapHspecM` (which is needed if you need to `eval`, produce values, and
+-- hand them somewhere else (so they can't be created within `f`).
+modifySite' :: (Handler b b () -> Handler b b ())
+            -> SnapHspecM b a
+            -> SnapHspecM b a
+modifySite' f a = do (SnapHspecState r site s i) <- S.get
+                     S.put (SnapHspecState r (f site) s i)
+                     a
+
+-- | Evaluate a Handler action after each test.
+afterEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
+afterEval h = after (\(SnapHspecState r site s i) -> void $ evalHandlerSafe h s i)
+
+-- | Evaluate a Handler action before each test.
+beforeEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
+beforeEval h = beforeWith (\state@(SnapHspecState r site s i) -> do void $ evalHandlerSafe h s i
+                                                                    return state)
+
 -- | Runs a GET request.
 get :: Text -> SnapHspecM b TestResponse
 get path = get' path M.empty
@@ -162,6 +199,15 @@ params = M.fromList . map (\x -> (fst x, [snd x]))
 post :: Text -> Snap.Params -> SnapHspecM b TestResponse
 post path ps = runRequest (Test.postUrlEncoded (T.encodeUtf8 path) ps)
 
+-- | Restricts a response to matches for a given CSS selector.
+-- Does nothing to non-Html responses.
+restrictResponse :: Text -> TestResponse -> TestResponse
+restrictResponse selector (Html body) =
+  case HXT.runLA (HXT.xshow $ HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body) of
+    [] -> Html ""
+    matches -> Html (T.concat (map T.pack matches))
+restrictResponse _ r = r
+
 -- | Runs an arbitrary stateful action from your application.
 eval :: Handler b b a -> SnapHspecM b a
 eval act = do (SnapHspecState _ _ app is) <- S.get
@@ -175,6 +221,19 @@ setResult r = do (SnapHspecState r' s a i) <- S.get
                  case r' of
                    Success -> S.put (SnapHspecState r s a i)
                    _ -> return ()
+
+-- | Asserts that a given stateful action will produce a specific different result after
+-- an action has been run.
+shouldChange :: (Show a, Eq a)
+             => (a -> a)
+             -> (Handler b b a)
+             -> SnapHspecM b c
+             -> SnapHspecM b ()
+shouldChange f v act = do before' <- eval v
+                          act
+                          after' <- eval v
+                          shouldEqual (f before') after'
+
 
 -- | Asserts that two values are equal.
 shouldEqual :: (Show a, Eq a)
@@ -252,41 +311,41 @@ shouldNot300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult (Fail "Go
 shouldNot300To _ _ = setResult Success
 
 -- | Assert that a response (which should be Html) has a given selector.
-shouldHaveSelector :: TestResponse -> Text -> SnapHspecM b ()
-shouldHaveSelector r@(Html body) selector =
-  setResult $ if haveSelector' r selector
+shouldHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
+shouldHaveSelector selector r@(Html body) =
+  setResult $ if haveSelector' selector r
                 then Success
                 else (Fail msg)
   where msg = (T.unpack $ T.concat ["Html should have contained selector: ", selector, "\n\n", body])
-shouldHaveSelector _ match = setResult (Fail (T.unpack $ T.concat ["Non-HTML body should have contained css selector: ", match]))
+shouldHaveSelector match _ = setResult (Fail (T.unpack $ T.concat ["Non-HTML body should have contained css selector: ", match]))
 
 -- | Assert that a response (which should be Html) doesn't have a given selector.
-shouldNotHaveSelector :: TestResponse -> Text -> SnapHspecM b ()
-shouldNotHaveSelector r@(Html body) selector =
-  setResult $ if haveSelector' r selector
+shouldNotHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
+shouldNotHaveSelector selector r@(Html body) =
+  setResult $ if haveSelector' selector r
                 then (Fail msg)
                 else Success
   where msg = (T.unpack $ T.concat ["Html should not have contained selector: ", selector, "\n\n", body])
 shouldNotHaveSelector _ _ = setResult Success
 
-haveSelector' :: TestResponse -> Text -> Bool
-haveSelector' (Html body) selector =
+haveSelector' :: Text -> TestResponse -> Bool
+haveSelector' selector (Html body) =
   case HXT.runLA (HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body)  of
     [] -> False
     _ -> True
 haveSelector' _ _ = False
 
 -- | Asserts that the response (which should be Html) contains the given text.
-shouldHaveText :: TestResponse -> Text -> SnapHspecM b ()
-shouldHaveText (Html body) match =
+shouldHaveText :: Text -> TestResponse -> SnapHspecM b ()
+shouldHaveText match (Html body) =
   if T.isInfixOf match body
   then setResult Success
   else setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
-shouldHaveText _ match = setResult (Fail (T.unpack $ T.concat ["Body contains: ", match]))
+shouldHaveText match _ = setResult (Fail (T.unpack $ T.concat ["Body contains: ", match]))
 
 -- | Asserts that the response (which should be Html) does not contain the given text.
-shouldNotHaveText :: TestResponse -> Text -> SnapHspecM b ()
-shouldNotHaveText (Html body) match =
+shouldNotHaveText :: Text -> TestResponse -> SnapHspecM b ()
+shouldNotHaveText match (Html body) =
   if T.isInfixOf match body
   then setResult (Fail $ T.unpack $ T.concat [body, "' contains '", match, "'."])
   else setResult Success
