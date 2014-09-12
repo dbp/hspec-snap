@@ -116,6 +116,11 @@ instance Example (SnapHspecM b ()) where
        takeMVar mv
 
 -- | Runs a given action once after all the tests in the given block have run.
+--
+-- __Warning__: Due to current limitations to how Hspec works, this only works
+-- if all of the tests within the block are run. This means that
+-- if you only run some of the tests (using the @-m@ option) the action will
+-- not be run.
 afterAll :: IO () -> SpecWith a -> SpecWith a
 afterAll action = go
   where go spec = do forest <- runIO $ runSpecM spec
@@ -145,6 +150,22 @@ afterAll action = go
 -- suite can have multiple calls to `snap`, though each one will cause
 -- the site initializer to run, which is often a slow operation (and
 -- will slow down test suites).
+--
+-- __Warning__: Due to current limitations to how Hspec works, the way
+-- that we run cleanup actions (using `afterAll`) from your site initializer depends on /all/
+-- of the tests within the block passed to `snap` running. This means that
+-- if you only run some of the tests (using the @-m@ option) the cleanup
+-- won't happen. But, there is no reason why you can't have many calls to
+-- `snap`, so the recommended behavior is to only use @-m@ with queries
+-- that will run entire blocks. For example:
+--
+-- > describe "api-tests" $ snap ...
+-- > describe "db-tests" $ snap ...
+--
+-- And then run with @-m api-tests@ or @-m db-tests@, rather than trying
+-- to match anything within. Hopefully, hspec will eventually be able to support
+-- what we need in such a way that filtering on any query won't prevent the
+-- cleanup from running.
 snap :: Handler b b () -> SnapletInit b b -> SpecWith (SnapHspecState b) -> Spec
 snap site app spec = do
   snapinit <- runIO $ getSnaplet (Just "test") app
