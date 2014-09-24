@@ -76,7 +76,7 @@ import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
 import           Data.ByteString         (ByteString)
 import qualified Data.Map                as M
-import           Data.Maybe              (fromMaybe)
+import           Data.Maybe              (fromJust, fromMaybe, isJust)
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
@@ -375,6 +375,7 @@ shouldNotHaveText _ _ = setResult Success
 
 -- | A data type for tests against forms.
 data FormExpectations a = Value a           -- ^ The value the form should take (and should be valid)
+                        | Predicate (a -> Bool)
                         | ErrorPaths [Text] -- ^ The error paths that should be populated
 
 -- | Tests against digestive-functors forms.
@@ -388,6 +389,7 @@ form expected theForm theParams =
   do r <- eval $ DF.postForm "form" theForm (const $ return lookupParam)
      case expected of
        Value a -> shouldEqual (snd r) (Just a)
+       Predicate f -> shouldBeTrue (isJust (snd r) && f (fromJust (snd r)))
        ErrorPaths expectedPaths ->
          do let viewErrorPaths = map (DF.fromPath . fst) $ DF.viewErrors $ fst r
             shouldBeTrue (all (`elem` viewErrorPaths) expectedPaths

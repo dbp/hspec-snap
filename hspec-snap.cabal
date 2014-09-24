@@ -47,4 +47,4 @@ Test-Suite test-hspec-snap
                      , snap-core >= 0.9 && < 0.10
                      , text >= 0.11 && < 1.2
                      , transformers >= 0.3 && < 0.4
-    build-depends: hspec-snap == 0.1.1.2
+    build-depends: hspec-snap == 0.2.0.0

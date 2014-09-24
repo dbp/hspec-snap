@@ -70,15 +70,15 @@ tests mvar =
     describe "requests" $ do
       it "should match selector from a GET request" $ do
         p <- get "/test"
-        p `shouldHaveSelector` "table td"
-        p `shouldNotHaveSelector` "table td.doesntexist"
-        get "/redirect" >>= flip shouldNotHaveSelector "table td.doesntexist"
-        get "/invalid_url" >>= flip shouldNotHaveSelector "table td.doesntexist"
+        shouldHaveSelector "table td" p
+        shouldNotHaveSelector "table td.doesntexist" p
+        get "/redirect" >>= shouldNotHaveSelector "table td.doesntexist"
+        get "/invalid_url" >>= shouldNotHaveSelector "table td.doesntexist"
       it "should not match <html> on POST request" $
-        post "/test" M.empty >>= flip shouldNotHaveText "<html>"
+        post "/test" M.empty >>= shouldNotHaveText "<html>"
       it "should post parameters" $ do
-        post "/params" (params [("q", "hello")]) >>= flip shouldHaveText "hello"
-        post "/params" (params [("r", "hello")]) >>= flip shouldNotHaveText "hello"
+        post "/params" (params [("q", "hello")]) >>= shouldHaveText "hello"
+        post "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
       it "basic equality" $ do
         eval (return 1) >>= shouldEqual 1
         shouldNotEqual 1 2
@@ -114,6 +114,8 @@ tests mvar =
         form (ErrorPaths ["a"]) testForm (M.fromList [("a", ""), ("b", "bar")])
         form (ErrorPaths ["a"]) testForm (M.fromList [("b", "bar")])
         form (ErrorPaths ["a"]) testForm (M.fromList [])
+      it "should call predicates on valid data" $ do
+        form (Predicate (("oo" `T.isInfixOf`) . fst)) testForm (M.fromList [("a", "foobar")])
 
 
 ----------------------------------------------------------

@@ -1,1 +1,5 @@
+0.2.0.0 - 2014-9-24 - Change order of parameters in predicates that take two arguments
+	to make pattern of `get req >>= shouldHaveProp foo` work (vs needing to call `flip`).
+	And add more predicates.
+
 0.1.0.0 - 2014-9-3 - Initial release.
