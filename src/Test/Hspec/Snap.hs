@@ -389,7 +389,16 @@ form expected theForm theParams =
   do r <- eval $ DF.postForm "form" theForm (const $ return lookupParam)
      case expected of
        Value a -> shouldEqual (snd r) (Just a)
-       Predicate f -> shouldBeTrue (isJust (snd r) && f (fromJust (snd r)))
+       Predicate f ->
+         case snd r of
+           Nothing -> setResult (Fail $ T.unpack $
+                                 T.append "Expected form to validate. Resulted in errors: "
+                                          (T.pack (show $ DF.viewErrors $ fst r)))
+           Just v -> case f v of
+                      True -> setResult Success
+                      False -> setResult (Fail $ T.unpack $
+                                          T.append "Expected predicate to pass on value: "
+                                                   (T.pack (show v)))
        ErrorPaths expectedPaths ->
          do let viewErrorPaths = map (DF.fromPath . fst) $ DF.viewErrors $ fst r
             shouldBeTrue (all (`elem` viewErrorPaths) expectedPaths
