@@ -196,7 +196,11 @@ modifySite' f a = do (SnapHspecState r site s i) <- S.get
 
 -- | Evaluate a Handler action after each test.
 afterEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
-afterEval h = after (\(SnapHspecState r site s i) -> void $ evalHandlerSafe h s i)
+afterEval h = after (\(SnapHspecState r site s i) ->
+                       do res <- evalHandlerSafe h s i
+                          case res of
+                            Right _ -> return ()
+                            Left msg -> liftIO $ print msg)
 
 -- | Evaluate a Handler action before each test.
 beforeEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
