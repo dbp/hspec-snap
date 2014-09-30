@@ -229,13 +229,15 @@ recordSession a = do st@(SnapHspecState r site s i mv) <- S.get
                      S.put (SnapHspecState r (do ps <- liftIO $ readMVar mv
                                                  with getSessionLens $ mapM_ (uncurry setInSession) ps
                                                  with getSessionLens commitSession
-                                                 site
+                                                 (site <|> return ())
                                                  ps' <- with getSessionLens sessionToList
                                                  cur <- liftIO $ takeMVar mv
                                                  liftIO $ putMVar mv (cur ++ ps'))
                                               s i mv)
                      res <- a
                      (SnapHspecState r' _ _ _ _) <- S.get
+                     liftIO $ takeMVar mv
+                     liftIO $ putMVar mv []
                      S.put (SnapHspecState r' site s i mv)
                      return res
 

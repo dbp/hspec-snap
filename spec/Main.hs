@@ -21,6 +21,7 @@ import qualified Data.Map                                    as M
 import           Data.Maybe                                  (fromMaybe)
 import           Data.Text                                   (Text)
 import qualified Data.Text                                   as T
+import qualified Data.Text.Encoding                          as T
 import           Snap                                        (Handler,
                                                               Method (..),
                                                               Snaplet,
@@ -71,10 +72,12 @@ routes = [("/test", method GET $ writeText html)
          ,("/setmv", do m <- use mv
                         void $ liftIO $ tryPutMVar m ()
                         return ())
-         ,("/setsess", do with sess $ setInSession "foo" "bar" >> commitSession
-                          writeText "")
-         ,("/getsess", do Just r <- with sess $ getFromSession "foo"
-                          writeText r)
+         ,("/setsess/:k", do Just k <- fmap T.decodeUtf8 <$> getParam "k"
+                             with sess $ setInSession k "bar" >> commitSession
+                             writeText "")
+         ,("/getsess/:k", do Just k <- fmap T.decodeUtf8 <$> getParam "k"
+                             Just r <- with sess $ getFromSession k
+                             writeText r)
          ]
 
 app :: MVar () -> SnapletInit App App
@@ -144,23 +147,25 @@ tests mvar =
         form (Predicate (("oo" `T.isInfixOf`) . fst)) testForm (M.fromList [("a", "foobar")])
     describe "sessions" $ do
       it "should be able to modify session in handlers" $
-        recordSession $ do get "/setsess"
+        recordSession $ do get "/setsess/4"
+                           sessionShouldContain "4"
                            sessionShouldContain "bar"
       it "should be able to modify session with eval" $
-        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
+        recordSession $ do eval (with sess $ setInSession "foozlo" "bar" >> commitSession)
+                           sessionShouldContain "foozlo"
                            sessionShouldContain "bar"
       it "should be able to persist sessions between requests" $
-        recordSession $ do get "/setsess"
-                           get "/getsess" >>= shouldHaveText "bar"
+        recordSession $ do get "/setsess/3"
+                           get "/getsess/3" >>= shouldHaveText "bar"
       it "should be able to persist sessions between eval and requests" $
-        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
-                           get "/getsess" >>= shouldHaveText "bar"
+        recordSession $ do eval (with sess $ setInSession "2" "bar" >> commitSession)
+                           get "/getsess/2" >>= shouldHaveText "bar"
       it "should be able to persist sessions between requests and eval" $
-        recordSession $ do get "/setsess"
-                           eval (with sess $ getFromSession "foo" ) >>= shouldEqual (Just "bar")
+        recordSession $ do get "/setsess/1"
+                           eval (with sess $ getFromSession "1" ) >>= shouldEqual (Just "bar")
       it "should be able to persist sessions between eval and eval" $
-        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
-                           eval (with sess $ getFromSession "foo" ) >>= shouldEqual (Just "bar")
+        recordSession $ do eval (with sess $ setInSession "foofoo" "bar" >> commitSession)
+                           eval (with sess $ getFromSession "foofoo" ) >>= shouldEqual (Just "bar")
 
 
 ----------------------------------------------------------
