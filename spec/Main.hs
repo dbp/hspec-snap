@@ -166,6 +166,12 @@ tests mvar =
       it "should be able to persist sessions between eval and eval" $
         recordSession $ do eval (with sess $ setInSession "foofoo" "bar" >> commitSession)
                            eval (with sess $ getFromSession "foofoo" ) >>= shouldEqual (Just "bar")
+      it "should be able to remove stuff from session" $
+        recordSession $ do eval (with sess $ setInSession "foobar" "baz" >> commitSession)
+                           sessionShouldContain "foobar"
+                           eval (with sess $ deleteFromSession "foobar" >> commitSession)
+                           sessionShouldNotContain "foobar"
+
 
 
 ----------------------------------------------------------
