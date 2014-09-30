@@ -29,6 +29,11 @@ module Test.Hspec.Snap (
   -- * Helpers for dealing with TestResponses
   , restrictResponse
 
+  -- * Dealing with session state (EXPERIMENTAL)
+  , session
+  , HasSession(..)
+  , sessionShouldContain
+
   -- * Evaluating application code
   , eval
 
@@ -66,9 +71,10 @@ module Test.Hspec.Snap (
   , evalHandlerSafe
   ) where
 
-import           Control.Applicative     ((<$>))
-import           Control.Concurrent.MVar (modifyMVar, newEmptyMVar, newMVar,
-                                          putMVar, takeMVar)
+import           Control.Applicative     ((<$>), (<|>))
+import           Control.Concurrent.MVar (MVar, modifyMVar, newEmptyMVar,
+                                          newMVar, putMVar, readMVar, takeMVar,
+                                          tryTakeMVar)
 import           Control.Exception       (SomeException, catch)
 import           Control.Monad           (void)
 import           Control.Monad.State     (StateT (..), runStateT)
@@ -82,7 +88,10 @@ import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
 import           Snap.Core               (Response (..), getHeader)
 import qualified Snap.Core               as Snap
-import           Snap.Snaplet            (Handler, Snaplet, SnapletInit)
+import           Snap.Snaplet            (Handler, Snaplet, SnapletInit,
+                                          SnapletLens, with)
+import           Snap.Snaplet.Session    (SessionManager, sessionToList,
+                                          withSession)
 import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
                                           evalHandler', getSnaplet, runHandler')
 import           Snap.Test               (RequestBuilder, getResponseBody)
@@ -104,15 +113,18 @@ data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty
 type SnapHspecM b = StateT (SnapHspecState b) IO
 
 -- | Internal state used to share site initialization across tests, and to propogate failures.
-data SnapHspecState b = SnapHspecState Result (Handler b b ()) (Snaplet b) (InitializerState b)
+data SnapHspecState b = SnapHspecState Result (Handler b b ())
+                                              (Snaplet b)
+                                              (InitializerState b)
+                                              (MVar [(Text, Text)]) -- ^ Session state
 
 
 instance Example (SnapHspecM b ()) where
   type Arg (SnapHspecM b ()) = SnapHspecState b
   evaluateExample s _ cb _ =
     do mv <- newEmptyMVar
-       cb $ \st@(SnapHspecState _ _ _ _) -> do ((),(SnapHspecState r' _ _ _)) <- runStateT s st
-                                               putMVar mv r'
+       cb $ \st@(SnapHspecState _ _ _ _ _) -> do ((),(SnapHspecState r' _ _ _ _)) <- runStateT s st
+                                                 putMVar mv r'
        takeMVar mv
 
 -- | Runs a given action once after all the tests in the given block have run.
@@ -169,11 +181,12 @@ afterAll action = go
 snap :: Handler b b () -> SnapletInit b b -> SpecWith (SnapHspecState b) -> Spec
 snap site app spec = do
   snapinit <- runIO $ getSnaplet (Just "test") app
+  mv <- runIO (newMVar [])
   case snapinit of
     Left err -> error $ show err
     Right (snaplet, initstate) -> do
       afterAll (closeSnaplet initstate) $
-        before (return (SnapHspecState Success site snaplet initstate)) spec
+        before (return (SnapHspecState Success site snaplet initstate mv)) spec
 
 -- | This allows you to change the default handler you are running
 -- requests against within a block. This is most likely useful for
@@ -181,8 +194,8 @@ snap site app spec = do
 modifySite :: (Handler b b () -> Handler b b ())
            -> SpecWith (SnapHspecState b)
            -> SpecWith (SnapHspecState b)
-modifySite f = beforeWith (\(SnapHspecState r site snaplet initst) ->
-                             return (SnapHspecState r (f site) snaplet initst))
+modifySite f = beforeWith (\(SnapHspecState r site snaplet initst sess) ->
+                             return (SnapHspecState r (f site) snaplet initst sess))
 
 -- | This performs a similar operation to `modifySite` but in the context
 -- of `SnapHspecM` (which is needed if you need to `eval`, produce values, and
@@ -190,13 +203,13 @@ modifySite f = beforeWith (\(SnapHspecState r site snaplet initst) ->
 modifySite' :: (Handler b b () -> Handler b b ())
             -> SnapHspecM b a
             -> SnapHspecM b a
-modifySite' f a = do (SnapHspecState r site s i) <- S.get
-                     S.put (SnapHspecState r (f site) s i)
+modifySite' f a = do (SnapHspecState r site s i sess) <- S.get
+                     S.put (SnapHspecState r (f site) s i sess)
                      a
 
 -- | Evaluate a Handler action after each test.
 afterEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
-afterEval h = after (\(SnapHspecState r site s i) ->
+afterEval h = after (\(SnapHspecState r site s i _) ->
                        do res <- evalHandlerSafe h s i
                           case res of
                             Right _ -> return ()
@@ -204,8 +217,33 @@ afterEval h = after (\(SnapHspecState r site s i) ->
 
 -- | Evaluate a Handler action before each test.
 beforeEval :: Handler b b () -> SpecWith (SnapHspecState b) -> SpecWith (SnapHspecState b)
-beforeEval h = beforeWith (\state@(SnapHspecState r site s i) -> do void $ evalHandlerSafe h s i
-                                                                    return state)
+beforeEval h = beforeWith (\state@(SnapHspecState r site s i _) -> do void $ evalHandlerSafe h s i
+                                                                      return state)
+
+class HasSession b where
+  getSessionLens :: SnapletLens b SessionManager
+
+session :: HasSession b => SnapHspecM b a -> SnapHspecM b a
+session a = do st@(SnapHspecState r site s i mv) <- S.get
+               S.put (SnapHspecState r (do site
+                                           ps <- with getSessionLens sessionToList
+                                           ps' <- liftIO $ takeMVar mv
+                                           liftIO $ putMVar mv (ps ++ ps'))
+                                        s i mv)
+               res <- a
+               (SnapHspecState r' _ _ _ _) <- S.get
+               S.put (SnapHspecState r' site s i mv)
+               return res
+
+sessionShouldContain :: Text -> SnapHspecM b ()
+sessionShouldContain t =
+  do (SnapHspecState _ _ _ _ mv) <- S.get
+     ps <- liftIO $ readMVar mv
+     let contents = T.concat (map (uncurry T.append) ps)
+     if t `T.isInfixOf` contents
+       then setResult Success
+       else setResult (Fail $ "Session did not contain: " ++ (T.unpack t)
+                            ++ "\n\nSession was:\n" ++ (T.unpack contents))
 
 -- | Runs a GET request.
 get :: Text -> SnapHspecM b TestResponse
@@ -235,16 +273,18 @@ restrictResponse _ r = r
 
 -- | Runs an arbitrary stateful action from your application.
 eval :: Handler b b a -> SnapHspecM b a
-eval act = do (SnapHspecState _ _ app is) <- S.get
-              liftIO $ fmap (either (error . T.unpack) id) $ evalHandlerSafe act app is
+eval act = do (SnapHspecState _ site app is _) <- S.get
+              liftIO $ fmap (either (error . T.unpack) id) $ evalHandlerSafe (do r <- act
+                                                                                 (site <|> return ())
+                                                                                 return r) app is
 
 
 -- | Records a test Success or Fail. Only the first Fail will be
 -- recorded (and will cause the whole block to Fail).
 setResult :: Result -> SnapHspecM b ()
-setResult r = do (SnapHspecState r' s a i) <- S.get
+setResult r = do (SnapHspecState r' s a i sess) <- S.get
                  case r' of
-                   Success -> S.put (SnapHspecState r s a i)
+                   Success -> S.put (SnapHspecState r s a i sess)
                    _ -> return ()
 
 -- | Asserts that a given stateful action will produce a specific different result after
@@ -405,8 +445,17 @@ form expected theForm theParams =
                                                    (T.pack (show v)))
        ErrorPaths expectedPaths ->
          do let viewErrorPaths = map (DF.fromPath . fst) $ DF.viewErrors $ fst r
-            shouldBeTrue (all (`elem` viewErrorPaths) expectedPaths
-                          && (length viewErrorPaths == length expectedPaths))
+            if all (`elem` viewErrorPaths) expectedPaths
+               then if length viewErrorPaths == length expectedPaths
+                       then setResult Success
+                       else setResult (Fail $ "Number of errors did not match test. Got:\n\n "
+                                            ++ (show viewErrorPaths)
+                                            ++ "\n\nBut expected:\n\n"
+                                            ++ (show expectedPaths))
+               else setResult (Fail $ "Did not have all errors specified. Got:\n\n"
+                                    ++ (show viewErrorPaths)
+                                    ++ "\n\nBut expected:\n\n"
+                                    ++ (show expectedPaths))
   where lookupParam pth = case M.lookup (DF.fromPath pth) fixedParams of
                             Nothing -> return []
                             Just v -> return [DF.TextInput v]
@@ -415,7 +464,7 @@ form expected theForm theParams =
 -- | Runs a request (built with helpers from Snap.Test), resulting in a response.
 runRequest :: RequestBuilder IO () -> SnapHspecM b TestResponse
 runRequest req = do
-  (SnapHspecState _ site app is) <- S.get
+  (SnapHspecState _ site app is _) <- S.get
   res <- liftIO $ runHandlerSafe req site app is
   case res of
     Left err -> do

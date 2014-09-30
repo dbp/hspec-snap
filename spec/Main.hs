@@ -9,31 +9,50 @@ module Main where
 ----------------------------------------------------------
 -- Section 0: Imports.                                  --
 ----------------------------------------------------------
-import           Control.Applicative     ((<$>), (<*>))
+import           Control.Applicative                         ((<$>), (<*>))
+import           Control.Concurrent.MVar                     (MVar, isEmptyMVar,
+                                                              newEmptyMVar,
+                                                              tryPutMVar,
+                                                              tryTakeMVar)
 import           Control.Lens
-import           Data.ByteString         (ByteString)
-import qualified Data.Map                as M
-import           Data.Maybe              (fromMaybe)
-import           Data.Text               (Text)
-import qualified Data.Text               as T
-import           Snap                    (Handler, Method (..), SnapletInit,
-                                          addRoutes, getParam, liftIO,
-                                          makeSnaplet, method, route, void,
-                                          writeBS, writeText)
+import           Control.Monad                               (when)
+import           Data.ByteString                             (ByteString)
+import qualified Data.Map                                    as M
+import           Data.Maybe                                  (fromMaybe)
+import           Data.Text                                   (Text)
+import qualified Data.Text                                   as T
+import           Snap                                        (Handler,
+                                                              Method (..),
+                                                              Snaplet,
+                                                              SnapletInit,
+                                                              addRoutes,
+                                                              getParam, liftIO,
+                                                              makeSnaplet,
+                                                              method,
+                                                              nestSnaplet,
+                                                              route, void, with,
+                                                              writeBS,
+                                                              writeText)
 import qualified Snap
+import           Snap.Snaplet.Session
+import           Snap.Snaplet.Session.Backends.CookieSession
+import           System.Directory                            (doesFileExist,
+                                                              removeFile)
+import           System.IO
 import           Text.Digestive
 
-import           Control.Concurrent.MVar (MVar, isEmptyMVar, newEmptyMVar,
-                                          tryPutMVar, tryTakeMVar)
 import           Test.Hspec
 import           Test.Hspec.Snap
 
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
 ----------------------------------------------------------
-data App = App { _mv :: MVar () }
+data App = App { _mv :: MVar (), _sess :: Snaplet SessionManager }
 
 makeLenses ''App
+
+instance HasSession App where
+  getSessionLens = sess
 
 html :: Text
 html = "<table><tr><td>One</td><td>Two</td></tr></table>"
@@ -52,12 +71,17 @@ routes = [("/test", method GET $ writeText html)
          ,("/setmv", do m <- use mv
                         void $ liftIO $ tryPutMVar m ()
                         return ())
+         ,("/setsess", do with sess $ setInSession "foo" "bar" >> commitSession
+                          writeText "")
          ]
 
 app :: MVar () -> SnapletInit App App
 app mvar = makeSnaplet "app" "An snaplet example application." Nothing $ do
          addRoutes routes
-         return (App mvar)
+         s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" (Just 3600)
+         Snap.onUnload (do e <- doesFileExist "site_key.txt"
+                           when e $ removeFile "site_key.txt")
+         return (App mvar s)
 
 
 ----------------------------------------------------------
@@ -116,6 +140,13 @@ tests mvar =
         form (ErrorPaths ["a"]) testForm (M.fromList [])
       it "should call predicates on valid data" $ do
         form (Predicate (("oo" `T.isInfixOf`) . fst)) testForm (M.fromList [("a", "foobar")])
+    describe "sessions" $ do
+      it "should be able to modify session in handlers" $
+        session $ do get "/setsess"
+                     sessionShouldContain "bar"
+      it "should be able to modify session with eval" $
+        session $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
+                     sessionShouldContain "bar"
 
 
 ----------------------------------------------------------
