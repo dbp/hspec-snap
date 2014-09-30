@@ -73,6 +73,8 @@ routes = [("/test", method GET $ writeText html)
                         return ())
          ,("/setsess", do with sess $ setInSession "foo" "bar" >> commitSession
                           writeText "")
+         ,("/getsess", do Just r <- with sess $ getFromSession "foo"
+                          writeText r)
          ]
 
 app :: MVar () -> SnapletInit App App
@@ -142,11 +144,23 @@ tests mvar =
         form (Predicate (("oo" `T.isInfixOf`) . fst)) testForm (M.fromList [("a", "foobar")])
     describe "sessions" $ do
       it "should be able to modify session in handlers" $
-        session $ do get "/setsess"
-                     sessionShouldContain "bar"
+        recordSession $ do get "/setsess"
+                           sessionShouldContain "bar"
       it "should be able to modify session with eval" $
-        session $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
-                     sessionShouldContain "bar"
+        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
+                           sessionShouldContain "bar"
+      it "should be able to persist sessions between requests" $
+        recordSession $ do get "/setsess"
+                           get "/getsess" >>= shouldHaveText "bar"
+      it "should be able to persist sessions between eval and requests" $
+        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
+                           get "/getsess" >>= shouldHaveText "bar"
+      it "should be able to persist sessions between requests and eval" $
+        recordSession $ do get "/setsess"
+                           eval (with sess $ getFromSession "foo" ) >>= shouldEqual (Just "bar")
+      it "should be able to persist sessions between eval and eval" $
+        recordSession $ do eval (with sess $ setInSession "foo" "bar" >> commitSession)
+                           eval (with sess $ getFromSession "foo" ) >>= shouldEqual (Just "bar")
 
 
 ----------------------------------------------------------

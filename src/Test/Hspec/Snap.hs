@@ -30,7 +30,7 @@ module Test.Hspec.Snap (
   , restrictResponse
 
   -- * Dealing with session state (EXPERIMENTAL)
-  , session
+  , recordSession
   , HasSession(..)
   , sessionShouldContain
 
@@ -90,7 +90,8 @@ import           Snap.Core               (Response (..), getHeader)
 import qualified Snap.Core               as Snap
 import           Snap.Snaplet            (Handler, Snaplet, SnapletInit,
                                           SnapletLens, with)
-import           Snap.Snaplet.Session    (SessionManager, sessionToList,
+import           Snap.Snaplet.Session    (SessionManager, commitSession,
+                                          sessionToList, setInSession,
                                           withSession)
 import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
                                           evalHandler', getSnaplet, runHandler')
@@ -223,17 +224,20 @@ beforeEval h = beforeWith (\state@(SnapHspecState r site s i _) -> do void $ eva
 class HasSession b where
   getSessionLens :: SnapletLens b SessionManager
 
-session :: HasSession b => SnapHspecM b a -> SnapHspecM b a
-session a = do st@(SnapHspecState r site s i mv) <- S.get
-               S.put (SnapHspecState r (do site
-                                           ps <- with getSessionLens sessionToList
-                                           ps' <- liftIO $ takeMVar mv
-                                           liftIO $ putMVar mv (ps ++ ps'))
-                                        s i mv)
-               res <- a
-               (SnapHspecState r' _ _ _ _) <- S.get
-               S.put (SnapHspecState r' site s i mv)
-               return res
+recordSession :: HasSession b => SnapHspecM b a -> SnapHspecM b a
+recordSession a = do st@(SnapHspecState r site s i mv) <- S.get
+                     S.put (SnapHspecState r (do ps <- liftIO $ readMVar mv
+                                                 with getSessionLens $ mapM_ (uncurry setInSession) ps
+                                                 with getSessionLens commitSession
+                                                 site
+                                                 ps' <- with getSessionLens sessionToList
+                                                 cur <- liftIO $ takeMVar mv
+                                                 liftIO $ putMVar mv (cur ++ ps'))
+                                              s i mv)
+                     res <- a
+                     (SnapHspecState r' _ _ _ _) <- S.get
+                     S.put (SnapHspecState r' site s i mv)
+                     return res
 
 sessionShouldContain :: Text -> SnapHspecM b ()
 sessionShouldContain t =
@@ -273,8 +277,9 @@ restrictResponse _ r = r
 
 -- | Runs an arbitrary stateful action from your application.
 eval :: Handler b b a -> SnapHspecM b a
-eval act = do (SnapHspecState _ site app is _) <- S.get
-              liftIO $ fmap (either (error . T.unpack) id) $ evalHandlerSafe (do r <- act
+eval act = do (SnapHspecState _ site app is mv) <- S.get
+              liftIO $ fmap (either (error . T.unpack) id) $ evalHandlerSafe (do (site <|> return ())
+                                                                                 r <- act
                                                                                  (site <|> return ())
                                                                                  return r) app is
 
