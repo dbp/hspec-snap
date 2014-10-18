@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE TemplateHaskell           #-}
@@ -12,11 +13,14 @@ module Main where
 import           Control.Applicative                         ((<$>), (<*>))
 import           Control.Concurrent.MVar                     (MVar, isEmptyMVar,
                                                               newEmptyMVar,
+                                                              newMVar, putMVar,
+                                                              takeMVar,
                                                               tryPutMVar,
                                                               tryTakeMVar)
 import           Control.Lens
 import           Control.Monad                               (when)
 import           Data.ByteString                             (ByteString)
+import           Data.Map                                    (Map)
 import qualified Data.Map                                    as M
 import           Data.Maybe                                  (fromMaybe)
 import           Data.Text                                   (Text)
@@ -48,9 +52,24 @@ import           Test.Hspec.Snap
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
 ----------------------------------------------------------
-data App = App { _mv :: MVar (), _sess :: Snaplet SessionManager }
+data Foo = Foo Int String String
+data App = App { _mv :: MVar (), _store :: MVar (Map Int Foo), _sess :: Snaplet SessionManager }
 
 makeLenses ''App
+
+newFoo :: String -> String -> Handler App App Foo
+newFoo s1 s2 = do smvar <- use store
+                  mp <- liftIO $ takeMVar smvar
+                  let i = 1 + M.size mp
+                  let foo = Foo i s1 s2
+                  liftIO $ putMVar smvar (M.insert i foo mp)
+                  return foo
+
+lookupFoo :: Int -> Handler App App (Maybe Foo)
+lookupFoo i = do smvar <- use store
+                 mp <- liftIO $ takeMVar smvar
+                 liftIO $ putMVar smvar mp
+                 return (M.lookup i mp)
 
 instance HasSession App where
   getSessionLens = sess
@@ -80,22 +99,29 @@ routes = [("/test", method GET $ writeText html)
                              writeText r)
          ]
 
-app :: MVar () -> SnapletInit App App
-app mvar = makeSnaplet "app" "An snaplet example application." Nothing $ do
-         addRoutes routes
-         s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" (Just 3600)
-         Snap.onUnload (do e <- doesFileExist "site_key.txt"
-                           when e $ removeFile "site_key.txt")
-         return (App mvar s)
+app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
+app state mvar = makeSnaplet "app" "An snaplet example application." Nothing $ do
+   addRoutes routes
+   s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" (Just 3600)
+   Snap.onUnload (do e <- doesFileExist "site_key.txt"
+                     when e $ removeFile "site_key.txt")
+   return (App mvar state s)
 
 
 ----------------------------------------------------------
 -- Section 2: Test suite against application.           --
 ----------------------------------------------------------
 
-tests :: MVar () -> Spec
-tests mvar =
-  snap (route routes) (app mvar) $ do
+newtype FooFields = FooFields (IO String)
+
+instance Factory App Foo FooFields where
+  fields = FooFields (return "default")
+  save (FooFields as) = do s <- liftIO as
+                           eval (newFoo s "const")
+
+tests :: MVar (Map Int Foo) -> MVar () -> Spec
+tests store mvar =
+  snap (route routes) (app store mvar) $ do
     describe "requests" $ do
       it "should match selector from a GET request" $ do
         p <- get "/test"
@@ -171,7 +197,16 @@ tests mvar =
                            sessionShouldContain "foobar"
                            eval (with sess $ deleteFromSession "foobar" >> commitSession)
                            sessionShouldNotContain "foobar"
-
+    describe "factories" $ do
+      it "should be able to generate a foo" $
+        do (Foo i _ _) <- create id
+           Just (Foo _ _ s) <- eval (lookupFoo i)
+           s `shouldEqual` "const"
+      it "should be able to modify defaulted values" $
+        do (Foo _ s _) <- create (\_ -> FooFields (return "Hi!"))
+           s `shouldEqual` "Hi!"
+           (Foo _ s _) <- create id
+           s `shouldNotEqual` "Hi!"
 
 
 ----------------------------------------------------------
@@ -180,4 +215,5 @@ tests mvar =
 main :: IO ()
 main = do
   mvar <- newEmptyMVar
-  hspec (tests mvar)
+  store <- newMVar M.empty
+  hspec (tests store mvar)

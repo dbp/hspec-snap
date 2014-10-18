@@ -1,9 +1,13 @@
-{-# LANGUAGE FlexibleInstances    #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TupleSections        #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
 
 module Test.Hspec.Snap (
   -- * Running blocks of hspec-snap tests
@@ -16,6 +20,9 @@ module Test.Hspec.Snap (
   -- * Core data types
   , TestResponse(..)
   , SnapHspecM
+
+  -- * Factory style test data generation
+  , Factory(..)
 
   -- * Requests
   , get
@@ -112,12 +119,24 @@ data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty
 type SnapHspecM b = StateT (SnapHspecState b) IO
 
 -- | Internal state used to share site initialization across tests, and to propogate failures.
-data SnapHspecState b = SnapHspecState Result (Handler b b ())      -- ^ Main handler
-                                              (Snaplet b)           -- ^ Startup state
-                                              (InitializerState b)  -- ^ Startup state
-                                              (MVar [(Text, Text)]) -- ^ Session state
-                                              (Handler b b ())      -- ^ Before handler
-                                              (Handler b b ())      -- ^ After handler
+-- Understanding it is completely unnecessary to use the library.
+--
+-- The fields it contains, in order, are:
+--
+-- > Result
+-- > Main handler
+-- > Startup state
+-- > Startup state
+-- > Session state
+-- > Before handler (runs before each eval)
+-- > After handler (runs after each eval).
+data SnapHspecState b = SnapHspecState Result
+                                       (Handler b b ())
+                                       (Snaplet b)
+                                       (InitializerState b)
+                                       (MVar [(Text, Text)])
+                                       (Handler b b ())
+                                       (Handler b b ())
 
 
 instance Example (SnapHspecM b ()) where
@@ -128,6 +147,30 @@ instance Example (SnapHspecM b ()) where
               do ((),(SnapHspecState r' _ _ _ _ _ _)) <- runStateT s st
                  putMVar mv r'
        takeMVar mv
+
+-- | Factory instances allow you to easily generate test data.
+--
+-- Essentially, you specify a default way of constructing a
+-- data type, and allow certain parts of it to be modified (via
+-- the 'fields' data structure).
+--
+-- An example follows:
+--
+-- > data Foo = Foo Int
+-- > newtype FooFields = FooFields (IO Int)
+-- > instance Factory App Foo FooFields where
+-- >   fields = randomIO
+-- >   save f = liftIO f >>= saveFoo . Foo1
+-- >
+-- > main = do create id :: SnapHspecM App Foo
+-- >           create (const $ FooFields (return 1)) :: SnapHspecM App Foo
+class Factory b a d | a -> b, a -> d, d -> a where
+  fields :: d
+  save :: d -> SnapHspecM b a
+  create :: (d -> d) -> SnapHspecM b a
+  create transform = save $ transform fields
+  reload :: a -> SnapHspecM b a
+  reload = return
 
 -- | Runs a given action once after all the tests in the given block have run.
 --

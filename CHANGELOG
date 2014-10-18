@@ -1,3 +1,8 @@
+0.3.0.0 - 2014-10-18 - Add support for factories, and no longer export `afterAll`.
+	A more correct implementation of `afterAll` is currently in hspec2
+	HEAD, and will be released soon (and we don't want to have to do
+	another major version when it does).
+
 0.2.0.0 - 2014-9-24 - Change order of parameters in predicates that take two arguments
 	to make pattern of `get req >>= shouldHaveProp foo` work (vs needing to call `flip`).
 	And add more predicates.
