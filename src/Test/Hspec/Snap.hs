@@ -17,9 +17,6 @@ module Test.Hspec.Snap (
   , TestResponse(..)
   , SnapHspecM
 
-  -- * General Hspec helpers
-  , afterAll
-
   -- * Requests
   , get
   , get'
