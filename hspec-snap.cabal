@@ -6,10 +6,13 @@ license:             BSD3
 license-file:        LICENSE
 author:              Daniel Patterson
 maintainer:          dbp@dbpmail.net
-extra-source-files: CHANGELOG
+extra-source-files:  CHANGELOG
 category:            Web, Snap
 build-type:          Simple
 cabal-version:       >=1.8
+source-repository head
+  type:     git
+  location: https://github.com/dbp/hspec-snap
 
 library
   exposed-modules:

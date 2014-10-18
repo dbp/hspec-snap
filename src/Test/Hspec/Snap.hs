@@ -159,7 +159,7 @@ instance Example (SnapHspecM b ()) where
 -- > data Foo = Foo Int
 -- > newtype FooFields = FooFields (IO Int)
 -- > instance Factory App Foo FooFields where
--- >   fields = randomIO
+-- >   fields = FooFields randomIO
 -- >   save f = liftIO f >>= saveFoo . Foo1
 -- >
 -- > main = do create id :: SnapHspecM App Foo
