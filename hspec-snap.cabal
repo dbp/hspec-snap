@@ -30,7 +30,7 @@ library
                      , snap >= 0.13 && < 0.14
                      , snap-core >= 0.9 && < 0.10
                      , text >= 0.11 && < 1.2
-                     , transformers >= 0.3 && < 0.4
+                     , transformers >= 0.3 && < 0.5
 
 
 Test-Suite test-hspec-snap
@@ -49,5 +49,5 @@ Test-Suite test-hspec-snap
                      , snap >= 0.13 && < 0.14
                      , snap-core >= 0.9 && < 0.10
                      , text >= 0.11 && < 1.2
-                     , transformers >= 0.3 && < 0.4
+                     , transformers >= 0.3 && < 0.5
     build-depends: hspec-snap == 0.3.0.0
