@@ -103,6 +103,7 @@ import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
 import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
+import           Test.Hspec              (afterAll)
 import           Test.Hspec.Core
 import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
@@ -172,33 +173,6 @@ class Factory b a d | a -> b, a -> d, d -> a where
   reload :: a -> SnapHspecM b a
   reload = return
 
--- | Runs a given action once after all the tests in the given block have run.
---
--- __Warning__: Due to current limitations to how Hspec works, this only works
--- if all of the tests within the block are run. This means that
--- if you only run some of the tests (using the @-m@ option) the action will
--- not be run.
-afterAll :: IO () -> SpecWith a -> SpecWith a
-afterAll action = go
-  where go spec = do forest <- runIO $ runSpecM spec
-                     res <- runIO $ mapM countFlatten forest
-                     let specs = map snd res
-                     let count = foldr (+) 0 (map fst res)
-                     mvar <- runIO $ newMVar count
-                     after (\_ -> cleanup mvar) (fromSpecList specs)
-        countFlatten :: SpecTree a -> IO (Int, SpecTree a)
-        countFlatten (SpecGroup s t) =
-          do (count, t') <- joinCount <$> mapM countFlatten t
-             return (count, SpecGroup s t')
-        countFlatten (BuildSpecs a) = do s <- a
-                                         (count, s') <- joinCount <$> mapM countFlatten s
-                                         return (count, BuildSpecs (return s'))
-        countFlatten (SpecItem s i) = return (1, SpecItem s i)
-        joinCount :: [(Int, b)] -> (Int, [b])
-        joinCount = foldr (\(a,b) (c,d) -> (a + c, b:d)) (0, [])
-        cleanup mv = modifyMVar mv $ \v -> if v == 1
-                                              then action >>= return . (v,)
-                                              else return (v - 1, ())
 
 -- | The way to run a block of `SnapHspecM` tests within an `hspec`
 -- test suite. This takes both the top level handler (usually `route
@@ -207,22 +181,6 @@ afterAll action = go
 -- suite can have multiple calls to `snap`, though each one will cause
 -- the site initializer to run, which is often a slow operation (and
 -- will slow down test suites).
---
--- __Warning__: Due to current limitations to how Hspec works, the way
--- that we run cleanup actions (using `afterAll`) from your site initializer depends on /all/
--- of the tests within the block passed to `snap` running. This means that
--- if you only run some of the tests (using the @-m@ option) the cleanup
--- won't happen. But, there is no reason why you can't have many calls to
--- `snap`, so the recommended behavior is to only use @-m@ with queries
--- that will run entire blocks. For example:
---
--- > describe "api-tests" $ snap ...
--- > describe "db-tests" $ snap ...
---
--- And then run with @-m api-tests@ or @-m db-tests@, rather than trying
--- to match anything within. Hopefully, hspec will eventually be able to support
--- what we need in such a way that filtering on any query won't prevent the
--- cleanup from running.
 snap :: Handler b b () -> SnapletInit b b -> SpecWith (SnapHspecState b) -> Spec
 snap site app spec = do
   snapinit <- runIO $ getSnaplet (Just "test") app
@@ -230,7 +188,7 @@ snap site app spec = do
   case snapinit of
     Left err -> error $ show err
     Right (snaplet, initstate) -> do
-      afterAll (closeSnaplet initstate) $
+      afterAll (const $ closeSnaplet initstate) $
         before (return (SnapHspecState Success site snaplet initstate mv (return ()) (return ()))) spec
 
 -- | This allows you to change the default handler you are running

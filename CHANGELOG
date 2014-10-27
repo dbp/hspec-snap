@@ -1,3 +1,6 @@
+0.3.1.0 - 2014-10-27 - Remove broken `afterAll` implementation and depend on hspec2 0.5,
+	which provides a correct implementation.
+
 0.3.0.0 - 2014-10-18 - Add support for factories, and no longer export `afterAll`.
 	A more correct implementation of `afterAll` is currently in hspec2
 	HEAD, and will be released soon (and we don't want to have to do
