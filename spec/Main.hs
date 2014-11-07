@@ -17,8 +17,13 @@ import           Control.Concurrent.MVar                     (MVar, isEmptyMVar,
                                                               takeMVar,
                                                               tryPutMVar,
                                                               tryTakeMVar)
-import           Control.Lens
+import           Control.Lens                         hiding ((.=))
 import           Control.Monad                               (when)
+import           Data.Aeson                                  (Value(..), (.=)
+                                                             ,object, decode
+                                                             ,ToJSON, FromJSON
+                                                             ,toJSON, parseJSON)
+import qualified Data.Aeson                                  as Ae ((.:))
 import           Data.ByteString                             (ByteString)
 import           Data.Map                                    (Map)
 import qualified Data.Map                                    as M
@@ -39,6 +44,7 @@ import           Snap                                        (Handler,
                                                               writeBS,
                                                               writeText)
 import qualified Snap
+import           Snap.Extras                                 (writeJSON)
 import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
@@ -81,6 +87,20 @@ testForm :: Form Text (Handler App App) (Text, Text)
 testForm = (,) <$> "a" .: check "Should not be empty" (\t -> not $ T.null t) (text Nothing)
                <*> "b" .: text Nothing
 
+data ExampleObject = ExampleObject Integer Text deriving (Show, Eq)
+
+instance ToJSON ExampleObject where
+    toJSON (ExampleObject i t) = object [ "aNumber" .= i
+                                        , "aString" .= t
+                                        ]
+
+instance FromJSON ExampleObject where
+    parseJSON (Object o) = ExampleObject <$> o Ae..: "aNumber" <*>
+                                             o Ae..: "aString"
+    parseJSON _          = fail $ "Expected ExampleObject as JSON object"
+
+exampleObj :: ExampleObject
+exampleObj = ExampleObject 42 "foo"
 
 routes :: [(ByteString, Handler App App ())]
 routes = [("/test", method GET $ writeText html)
@@ -97,6 +117,7 @@ routes = [("/test", method GET $ writeText html)
          ,("/getsess/:k", do Just k <- fmap T.decodeUtf8 <$> getParam "k"
                              Just r <- with sess $ getFromSession k
                              writeText r)
+         ,("/json", do writeJSON $ exampleObj)
          ]
 
 app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
@@ -150,6 +171,11 @@ tests store mvar =
         get "/redirect" >>= should300To "/test"
         get "/redirect" >>= shouldNot300To "/redirect"
         get "/test" >>= shouldNot300To "/redirect"
+      it "differentiates between response content types" $ do
+        Json raw <- get "/json"
+        Just exampleObj `shouldEqual` decode raw
+        Html doc <- get "/test"
+        doc `shouldEqual` html
     describe "stateful changes" $ do
       let isE = use mv >>= \m -> liftIO $ isEmptyMVar m
       after (\_ -> void $ tryTakeMVar mvar) $

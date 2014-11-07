@@ -86,6 +86,8 @@ import           Control.Monad.State     (StateT (..), runStateT)
 import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
 import           Data.ByteString         (ByteString)
+import qualified Data.ByteString.Lazy    as LBS (ByteString)
+import           Data.ByteString.Lazy    (fromStrict)
 import qualified Data.Map                as M
 import           Data.Maybe              (fromJust, fromMaybe, isJust)
 import           Data.Text               (Text)
@@ -112,7 +114,13 @@ import qualified Text.XML.HXT.Core       as HXT
 -- | The result of making requests against your application. Most
 -- assertions act against these types (for example, `should200`,
 -- `shouldHaveSelector`, etc).
-data TestResponse = Html Text | NotFound | Redirect Int Text | Other Int | Empty deriving (Show, Eq)
+data TestResponse = Html Text
+                  | Json LBS.ByteString
+                  | NotFound
+                  | Redirect Int Text
+                  | Other Int
+                  | Empty
+                  deriving (Show, Eq)
 
 -- | The main monad that tests run inside of. This allows both access
 -- to the application (via requests and `eval`) and to running
@@ -492,12 +500,19 @@ runRequest req = do
       case rspStatus response of
         404 -> return NotFound
         200 -> do
-          body <- liftIO $ getResponseBody response
-          return $ Html $ T.decodeUtf8 body
+          liftIO $ parse200 response
         _ -> if (rspStatus response) >= 300 && (rspStatus response) < 400
                 then do let url = fromMaybe "" $ getHeader "Location" response
                         return (Redirect (rspStatus response) (T.decodeUtf8 url))
                 else return (Other (rspStatus response))
+
+parse200 :: Response -> IO TestResponse
+parse200 resp =
+    let body        = getResponseBody resp
+        contentType = getHeader "content-type" resp in
+    case contentType of
+      Just "application/json" -> Json . fromStrict <$> body
+      _                       -> Html . T.decodeUtf8 <$> body
 
 -- | Runs a request against a given handler (often the whole site),
 -- with the given state. Returns any triggered exception, or the response.
