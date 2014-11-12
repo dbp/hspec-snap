@@ -36,3 +36,4 @@ BSD3
 ## Contributors
 
 Daniel Patterson (dbp@dbpmail.net)
+Tim Adams (timmy_tofu@linux.com)
