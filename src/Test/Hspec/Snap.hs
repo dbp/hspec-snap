@@ -106,7 +106,7 @@ import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
 import           Test.Hspec              (afterAll)
-import           Test.Hspec.Core
+import           Test.Hspec.Core.Spec
 import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
 import qualified Text.XML.HXT.Core       as HXT

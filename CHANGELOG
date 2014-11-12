@@ -1,3 +1,6 @@
+0.3.2.0 - 2014-11-12 - Add JSON response type, and depend on hspec-2.0 (which deprecates
+	the hspec2 package).
+
 0.3.1.0 - 2014-10-27 - Remove broken `afterAll` implementation and depend on hspec2 0.5,
 	which provides a correct implementation.
 

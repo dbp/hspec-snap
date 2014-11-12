@@ -33,6 +33,6 @@ You can run the test suite with `cabal test`.
 
 BSD3
 
-## Authors
+## Contributors
 
 Daniel Patterson (dbp@dbpmail.net)
