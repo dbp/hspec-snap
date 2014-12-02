@@ -1,3 +1,5 @@
+0.3.2.1 - 2014-12-2 - Loosen lens dependency bound.
+
 0.3.2.0 - 2014-11-12 - Add JSON response type, and depend on hspec-2.0 (which deprecates
 	the hspec2 package).
 
