@@ -21,6 +21,7 @@ import           Control.Lens                         hiding ((.=))
 import           Control.Monad                               (when)
 import           Data.Aeson                                  (Value(..), (.=)
                                                              ,object, decode
+                                                             , encode
                                                              ,ToJSON, FromJSON
                                                              ,toJSON, parseJSON)
 import qualified Data.Aeson                                  as Ae ((.:))
@@ -44,12 +45,14 @@ import           Snap                                        (Handler,
                                                               writeBS,
                                                               writeText)
 import qualified Snap
-import           Snap.Extras                                 (writeJSON)
+import           Snap.Extras                                 ( writeJSON
+                                                             , getJSON
+                                                             )
 import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
                                                               removeFile)
-import           System.IO
+
 import           Text.Digestive
 
 import           Test.Hspec
@@ -105,6 +108,10 @@ exampleObj = ExampleObject 42 "foo"
 routes :: [(ByteString, Handler App App ())]
 routes = [("/test", method GET $ writeText html)
          ,("/test", method POST $ writeText "")
+         ,("/jsonpost", method POST $ do
+                          Right json <- getJSON :: Snap.MonadSnap m => m (Either String ExampleObject)
+                          writeJSON json
+          )
          ,("/params", do mq <- getParam "q"
                          writeBS $ fromMaybe "" mq)
          ,("/redirect", Snap.redirect "/test")
@@ -128,7 +135,6 @@ app state mvar = makeSnaplet "app" "An snaplet example application." Nothing $ d
                      when e $ removeFile "site_key.txt")
    return (App mvar state s)
 
-
 ----------------------------------------------------------
 -- Section 2: Test suite against application.           --
 ----------------------------------------------------------
@@ -150,6 +156,10 @@ tests store mvar =
         shouldNotHaveSelector "table td.doesntexist" p
         get "/redirect" >>= shouldNotHaveSelector "table td.doesntexist"
         get "/invalid_url" >>= shouldNotHaveSelector "table td.doesntexist"
+      it "should POST and receive JSON" $ do
+        let k = ExampleObject 1 "thing"
+        postJSON "/jsonpost" k >>= \(Json res) -> do
+          Just k `shouldEqual` decode res
       it "should not match <html> on POST request" $
         post "/test" M.empty >>= shouldNotHaveText "<html>"
       it "should post parameters" $ do

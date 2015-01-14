@@ -28,6 +28,7 @@ module Test.Hspec.Snap (
   , get
   , get'
   , post
+  , postJSON
   , params
 
   -- * Helpers for dealing with TestResponses
@@ -76,6 +77,7 @@ module Test.Hspec.Snap (
   , evalHandlerSafe
   ) where
 
+import           Data.Aeson              (ToJSON, encode)
 import           Control.Applicative     ((<$>), (<|>))
 import           Control.Concurrent.MVar (MVar, modifyMVar, newEmptyMVar,
                                           newMVar, putMVar, readMVar, takeMVar,
@@ -87,7 +89,7 @@ import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
 import           Data.ByteString         (ByteString)
 import qualified Data.ByteString.Lazy    as LBS (ByteString)
-import           Data.ByteString.Lazy    (fromStrict)
+import           Data.ByteString.Lazy    (fromStrict, toStrict)
 import qualified Data.Map                as M
 import           Data.Maybe              (fromJust, fromMaybe, isJust)
 import           Data.Text               (Text)
@@ -105,7 +107,7 @@ import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
 import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
-import           Test.Hspec              (afterAll)
+
 import           Test.Hspec.Core.Spec
 import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
@@ -287,6 +289,11 @@ params = M.fromList . map (\x -> (fst x, [snd x]))
 -- | Creates a new POST request, with a set of parameters.
 post :: Text -> Snap.Params -> SnapHspecM b TestResponse
 post path ps = runRequest (Test.postUrlEncoded (T.encodeUtf8 path) ps)
+
+-- | Creates a new POST request, with a json body
+postJSON :: ToJSON a => Text -> a -> SnapHspecM b TestResponse
+postJSON path json =
+    runRequest (Test.postRaw (T.encodeUtf8 path) "application/json" $ toStrict $ encode json)
 
 -- | Restricts a response to matches for a given CSS selector.
 -- Does nothing to non-Html responses.
