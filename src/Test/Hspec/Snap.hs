@@ -27,6 +27,8 @@ module Test.Hspec.Snap (
   -- * Requests
   , get
   , get'
+  , put
+  , put'
   , post
   , params
 
@@ -86,6 +88,7 @@ import           Control.Monad.State     (StateT (..), runStateT)
 import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
 import           Data.ByteString         (ByteString)
+import qualified Data.ByteString.Char8   as BC8 (intercalate)
 import qualified Data.ByteString.Lazy    as LBS (ByteString)
 import           Data.ByteString.Lazy    (fromStrict)
 import qualified Data.Map                as M
@@ -278,6 +281,20 @@ get path = get' path M.empty
 -- | Runs a GET request, with a set of parameters.
 get' :: Text -> Snap.Params -> SnapHspecM b TestResponse
 get' path ps = runRequest (Test.get (T.encodeUtf8 path) ps)
+
+-- | Runs a PUT request with default MIME type "application/x-www-form-urlencoded"
+put :: Text -> [(ByteString, ByteString)] -> SnapHspecM b TestResponse
+put path ps = put' path formParams "application/x-www-form-urlencoded"
+  where
+    formParams = T.decodeUtf8 $ BC8.intercalate "&" $
+                 map (\(k, v) -> BC8.intercalate "=" [k, v]) ps
+
+-- | Runs a PUT request, with a set of parameters.
+put' :: Text -> Text -> Text -> SnapHspecM b TestResponse
+put' path ps mime = runRequest (Test.put (T.encodeUtf8 path)
+                                         (T.encodeUtf8 mime)
+                                         (T.encodeUtf8 ps)
+                               )
 
 -- | A helper to construct parameters.
 params :: [(ByteString, ByteString)] -- ^ Pairs of parameter and value.
