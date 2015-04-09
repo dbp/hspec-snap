@@ -26,7 +26,7 @@ library
                      , hspec-core         >= 2.0 && < 2.2
                      , hxt                >= 9.3 && < 9.4
                      , HandsomeSoup       >= 0.3 && < 0.4
-                     , lens               >= 3.10 && < 4.6
+                     , lens               >= 3.10 && < 5
                      , mtl                >= 2 && < 3
                      , snap               >= 0.13 && < 0.14
                      , snap-core          >= 0.9 && < 0.10
@@ -47,7 +47,7 @@ Test-Suite test-hspec-snap
                      , hspec-core         >= 2.0 && < 2.2
                      , hxt                >= 9.3 && < 9.4
                      , HandsomeSoup       >= 0.3 && < 0.4
-                     , lens               >= 3.10 && < 4.6
+                     , lens               >= 3.10 && < 5
                      , mtl                >= 2 && < 3
                      , snap               >= 0.13 && < 0.14
                      , snap-core          >= 0.9 && < 0.10
