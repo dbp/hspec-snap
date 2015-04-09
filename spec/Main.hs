@@ -44,7 +44,6 @@ import           Snap                                        (Handler,
                                                               writeBS,
                                                               writeText)
 import qualified Snap
-import           Snap.Extras                                 (writeJSON)
 import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
@@ -54,6 +53,8 @@ import           Text.Digestive
 
 import           Test.Hspec
 import           Test.Hspec.Snap
+
+import           Utils                                       (writeJSON)
 
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
