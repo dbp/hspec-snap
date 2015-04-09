@@ -28,7 +28,7 @@ directory.
 ## Tests
 
 You can run the test suite with `cabal test`. When the robots 
-last ran the suite, it: [![Circle CI](https://circleci.com/gh/dbp/hspec-snap.png?style=png&circle-token=cb855793cfa202fa807ffaf6adb3be979be457b3)](https://circleci.com/gh/dbp/hspec-snap)
+last ran the suite, it: [![Circle CI](https://circleci.com/gh/dbp/hspec-snap.svg?style=svg&circle-token=cb855793cfa202fa807ffaf6adb3be979be457b3)](https://circleci.com/gh/dbp/hspec-snap)
 
 ## License
 
