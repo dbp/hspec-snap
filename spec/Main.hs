@@ -25,6 +25,7 @@ import           Data.Aeson                                  (Value(..), (.=)
                                                              ,toJSON, parseJSON)
 import qualified Data.Aeson                                  as Ae ((.:))
 import           Data.ByteString                             (ByteString)
+import qualified Data.ByteString                             as BS (concat)
 import           Data.Map                                    (Map)
 import qualified Data.Map                                    as M
 import           Data.Maybe                                  (fromMaybe)
@@ -44,7 +45,6 @@ import           Snap                                        (Handler,
                                                               writeBS,
                                                               writeText)
 import qualified Snap
-import           Snap.Extras                                 (writeJSON)
 import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
@@ -54,6 +54,8 @@ import           Text.Digestive
 
 import           Test.Hspec
 import           Test.Hspec.Snap
+
+import           Utils                                       (writeJSON)
 
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
@@ -81,7 +83,7 @@ instance HasSession App where
   getSessionLens = sess
 
 html :: Text
-html = "<table><tr><td>One</td><td>Two</td></tr></table>"
+html = "<html><table><tr><td>One</td><td>Two</td></tr></table></html>"
 
 testForm :: Form Text (Handler App App) (Text, Text)
 testForm = (,) <$> "a" .: check "Should not be empty" (\t -> not $ T.null t) (text Nothing)
@@ -102,11 +104,21 @@ instance FromJSON ExampleObject where
 exampleObj :: ExampleObject
 exampleObj = ExampleObject 42 "foo"
 
+writeParamsAndMethod :: Maybe ByteString -> Snap.Method -> Handler App App ()
+writeParamsAndMethod mq m = case m of
+                              POST -> writeBS $ methodAndParam "POST "
+                              PUT  -> writeBS $ methodAndParam "PUT "
+                              _    -> writeBS "Not valid"
+  where
+    methodAndParam p = BS.concat [p, fromMaybe "" mq]
+
 routes :: [(ByteString, Handler App App ())]
 routes = [("/test", method GET $ writeText html)
          ,("/test", method POST $ writeText "")
+         ,("/test", method DELETE $ writeText "deleted")
+         ,("/test", method PUT $ writeText "")
          ,("/params", do mq <- getParam "q"
-                         writeBS $ fromMaybe "" mq)
+                         writeParamsAndMethod mq =<< (Snap.rqMethod <$> Snap.getRequest))
          ,("/redirect", Snap.redirect "/test")
          ,("/setmv", do m <- use mv
                         void $ liftIO $ tryPutMVar m ()
@@ -117,7 +129,7 @@ routes = [("/test", method GET $ writeText html)
          ,("/getsess/:k", do Just k <- fmap T.decodeUtf8 <$> getParam "k"
                              Just r <- with sess $ getFromSession k
                              writeText r)
-         ,("/json", do writeJSON $ exampleObj)
+         ,("/json", writeJSON $ exampleObj)
          ]
 
 app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
@@ -150,11 +162,18 @@ tests store mvar =
         shouldNotHaveSelector "table td.doesntexist" p
         get "/redirect" >>= shouldNotHaveSelector "table td.doesntexist"
         get "/invalid_url" >>= shouldNotHaveSelector "table td.doesntexist"
+      it "should have deleted as text on the response" $
+        delete "/test" >>= shouldHaveText "deleted"
       it "should not match <html> on POST request" $
         post "/test" M.empty >>= shouldNotHaveText "<html>"
       it "should post parameters" $ do
-        post "/params" (params [("q", "hello")]) >>= shouldHaveText "hello"
+        post "/params" (params [("q", "hello")]) >>= shouldHaveText "POST hello"
         post "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
+      it "should not match <html> on PUT request" $
+        put "/test" M.empty >>= shouldNotHaveText "<html>"
+      it "should put parameters" $ do
+        put "/params" (params [("q", "hello")]) >>= shouldHaveText "PUT hello"
+        put "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
       it "basic equality" $ do
         eval (return 1) >>= shouldEqual 1
         shouldNotEqual 1 2

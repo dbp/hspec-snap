@@ -25,9 +25,12 @@ module Test.Hspec.Snap (
   , Factory(..)
 
   -- * Requests
+  , delete
   , get
   , get'
   , post
+  , put
+  , put'
   , params
 
   -- * Helpers for dealing with TestResponses
@@ -271,6 +274,10 @@ sessionShouldNotContain t =
                             ++ "\n\nSession was:\n" ++ (T.unpack contents))
        else setResult Success
 
+-- | Runs a DELETE request
+delete :: Text -> SnapHspecM b TestResponse
+delete path = runRequest (Test.delete (T.encodeUtf8 path) M.empty)
+
 -- | Runs a GET request.
 get :: Text -> SnapHspecM b TestResponse
 get path = get' path M.empty
@@ -287,6 +294,16 @@ params = M.fromList . map (\x -> (fst x, [snd x]))
 -- | Creates a new POST request, with a set of parameters.
 post :: Text -> Snap.Params -> SnapHspecM b TestResponse
 post path ps = runRequest (Test.postUrlEncoded (T.encodeUtf8 path) ps)
+
+-- | Creates a new PUT request, with a set of parameters, with a default type of "application/x-www-form-urlencoded"
+put :: Text -> Snap.Params -> SnapHspecM b TestResponse
+put path params = put' path "application/x-www-form-urlencoded" params
+
+-- | Creates a new PUT request with a configurable MIME/type
+put' :: Text -> Text -> Snap.Params -> SnapHspecM b TestResponse
+put' path mime params = runRequest $ do
+  Test.put (T.encodeUtf8 path) (T.encodeUtf8 mime) ""
+  Test.setQueryString params
 
 -- | Restricts a response to matches for a given CSS selector.
 -- Does nothing to non-Html responses.
