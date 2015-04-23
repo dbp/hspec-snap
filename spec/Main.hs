@@ -18,7 +18,8 @@ import           Control.Concurrent.MVar                     (MVar, isEmptyMVar,
                                                               tryPutMVar,
                                                               tryTakeMVar)
 import           Control.Lens                         hiding ((.=))
-import           Control.Monad                               (when)
+import           Control.Monad                               (void, when)
+import           Control.Monad.IO.Class                      (liftIO)
 import           Data.Aeson                                  (Value(..), (.=)
                                                              ,object, decode
                                                              ,ToJSON, FromJSON
@@ -37,11 +38,11 @@ import           Snap                                        (Handler,
                                                               Snaplet,
                                                               SnapletInit,
                                                               addRoutes,
-                                                              getParam, liftIO,
+                                                              getParam,
                                                               makeSnaplet,
                                                               method,
                                                               nestSnaplet,
-                                                              route, void, with,
+                                                              route, with,
                                                               writeBS,
                                                               writeText)
 import qualified Snap
