@@ -1,3 +1,5 @@
+0.3.2.6 - 2015-4-26 - Rearrange imports to support Stackage LTS 2.4
+
 0.3.2.5 - 2015-4-22 - Add support for `PUT` and `DELETE`.
 
 0.3.2.4 - 2015-4-9 - Loosen lens bound and remove snap-extras dependency.
