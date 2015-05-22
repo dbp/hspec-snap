@@ -1,3 +1,5 @@
+0.3.2.9 - 2015-5-22 - Typo in previous release (dependency in test suite was wrong).
+
 0.3.2.8 - 2015-5-22 - Add spec/Utils.hs to other-modules so it is included in cabal sdist.
 
 0.3.2.7 - 2015-4-26 - Update dependencies (and a LANGUAGE flag) for GHC 7.10.
