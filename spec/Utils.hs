@@ -4,15 +4,18 @@
 Module      : Utils
 Description : Helpers for testing
 
-Currently just copypasta from snap-extras to avoid dependency conflicts
 -}
 module Utils where
 
-import           Data.Aeson      (encode, ToJSON)
+import           Data.Aeson              (decode, encode, FromJSON, ToJSON)
+import           Control.Applicative     ((<$>))
 
-import           Snap.Core       (modifyResponse, setHeader, writeLBS
-                                 ,MonadSnap)
+import           Snap.Core               (modifyResponse, readRequestBody
+                                         ,setHeader, writeLBS ,MonadSnap)
 
+-- | Attempts to parse JSON from a request body of max 1MiB
+parseJsonBody :: (MonadSnap m, FromJSON fj) => m (Maybe fj)
+parseJsonBody = decode <$> readRequestBody 1048576
 
 -------------------------------------------------------------------------------
 -- | Set MIME to 'application/json' and write given object into

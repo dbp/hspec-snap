@@ -57,7 +57,8 @@ import           Text.Digestive
 import           Test.Hspec
 import           Test.Hspec.Snap
 
-import           Utils                                       (writeJSON)
+import           Utils                                       (writeJSON
+                                                             ,parseJsonBody)
 
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
@@ -132,6 +133,11 @@ routes = [("/test", method GET $ writeText html)
                              Just r <- with sess $ getFromSession k
                              writeText r)
          ,("/json", writeJSON $ exampleObj)
+         ,("/postJson", do
+                          Just (ExampleObject i t) <- parseJsonBody
+                          writeJSON $ ExampleObject (i + 1)
+                                                    (t `T.append` "!")
+                          )
          ]
 
 app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
@@ -171,6 +177,9 @@ tests store mvar =
       it "should post parameters" $ do
         post "/params" (params [("q", "hello")]) >>= shouldHaveText "POST hello"
         post "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
+      it "should post json" $ do
+        Json raw <- postJson "/postJson" exampleObj
+        Just (ExampleObject 43 "foo!") `shouldEqual` decode raw
       it "should not match <html> on PUT request" $
         put "/test" M.empty >>= shouldNotHaveText "<html>"
       it "should put parameters" $ do

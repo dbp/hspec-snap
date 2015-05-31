@@ -29,6 +29,7 @@ module Test.Hspec.Snap (
   , get
   , get'
   , post
+  , postJson
   , put
   , put'
   , params
@@ -88,9 +89,10 @@ import           Control.Monad           (void)
 import           Control.Monad.State     (StateT (..), runStateT)
 import qualified Control.Monad.State     as S (get, put)
 import           Control.Monad.Trans     (liftIO)
+import           Data.Aeson              (encode, ToJSON)
 import           Data.ByteString         (ByteString)
 import qualified Data.ByteString.Lazy    as LBS (ByteString)
-import           Data.ByteString.Lazy    (fromStrict)
+import           Data.ByteString.Lazy    (fromStrict, toStrict)
 import qualified Data.Map                as M
 import           Data.Maybe              (fromJust, fromMaybe, isJust)
 import           Data.Text               (Text)
@@ -294,6 +296,12 @@ params = M.fromList . map (\x -> (fst x, [snd x]))
 -- | Creates a new POST request, with a set of parameters.
 post :: Text -> Snap.Params -> SnapHspecM b TestResponse
 post path ps = runRequest (Test.postUrlEncoded (T.encodeUtf8 path) ps)
+
+-- | Creates a new POST request with a given JSON value as the request body.
+postJson :: ToJSON tj => Text -> tj -> SnapHspecM b TestResponse
+postJson path json = runRequest $ Test.postRaw (T.encodeUtf8 path)
+                                               "application/json"
+                                               (toStrict $ encode json)
 
 -- | Creates a new PUT request, with a set of parameters, with a default type of "application/x-www-form-urlencoded"
 put :: Text -> Snap.Params -> SnapHspecM b TestResponse
