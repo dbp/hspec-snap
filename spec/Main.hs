@@ -51,7 +51,6 @@ import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
                                                               removeFile)
-import           System.IO
 import           Text.Digestive
 
 import           Test.Hspec

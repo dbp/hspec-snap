@@ -80,10 +80,10 @@ module Test.Hspec.Snap (
   , evalHandlerSafe
   ) where
 
-import           Control.Applicative     ((<$>), (<|>))
-import           Control.Concurrent.MVar (MVar, modifyMVar, newEmptyMVar,
-                                          newMVar, putMVar, readMVar, takeMVar,
-                                          tryTakeMVar)
+import           Control.Applicative     ((<$>))
+import           Control.Concurrent.MVar (MVar, newEmptyMVar, newMVar
+                                         ,putMVar, readMVar, takeMVar)
+
 import           Control.Exception       (SomeException, catch)
 import           Control.Monad           (void)
 import           Control.Monad.State     (StateT (..), runStateT)
@@ -94,7 +94,7 @@ import           Data.ByteString         (ByteString)
 import qualified Data.ByteString.Lazy    as LBS (ByteString)
 import           Data.ByteString.Lazy    (fromStrict, toStrict)
 import qualified Data.Map                as M
-import           Data.Maybe              (fromJust, fromMaybe, isJust)
+import           Data.Maybe              (fromMaybe)
 import           Data.Text               (Text)
 import qualified Data.Text               as T
 import qualified Data.Text.Encoding      as T
@@ -103,14 +103,12 @@ import qualified Snap.Core               as Snap
 import           Snap.Snaplet            (Handler, Snaplet, SnapletInit,
                                           SnapletLens, with)
 import           Snap.Snaplet.Session    (SessionManager, commitSession,
-                                          sessionToList, setInSession,
-                                          withSession)
+                                          sessionToList, setInSession)
 import           Snap.Snaplet.Test       (InitializerState, closeSnaplet,
                                           evalHandler', getSnaplet, runHandler')
 import           Snap.Test               (RequestBuilder, getResponseBody)
 import qualified Snap.Test               as Test
 import           Test.Hspec
-import           Test.Hspec              (afterAll)
 import           Test.Hspec.Core.Spec
 import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
