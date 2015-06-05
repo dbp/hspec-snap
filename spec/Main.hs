@@ -51,13 +51,13 @@ import           Snap.Snaplet.Session
 import           Snap.Snaplet.Session.Backends.CookieSession
 import           System.Directory                            (doesFileExist,
                                                               removeFile)
-import           System.IO
 import           Text.Digestive
 
 import           Test.Hspec
 import           Test.Hspec.Snap
 
-import           Utils                                       (writeJSON)
+import           Utils                                       (writeJSON
+                                                             ,parseJsonBody)
 
 ----------------------------------------------------------
 -- Section 1: Example application used for testing.     --
@@ -88,7 +88,7 @@ html :: Text
 html = "<html><table><tr><td>One</td><td>Two</td></tr></table></html>"
 
 testForm :: Form Text (Handler App App) (Text, Text)
-testForm = (,) <$> "a" .: check "Should not be empty" (\t -> not $ T.null t) (text Nothing)
+testForm = (,) <$> "a" .: check "Should not be empty" (not . T.null) (text Nothing)
                <*> "b" .: text Nothing
 
 data ExampleObject = ExampleObject Integer Text deriving (Show, Eq)
@@ -101,7 +101,7 @@ instance ToJSON ExampleObject where
 instance FromJSON ExampleObject where
     parseJSON (Object o) = ExampleObject <$> o Ae..: "aNumber" <*>
                                              o Ae..: "aString"
-    parseJSON _          = fail $ "Expected ExampleObject as JSON object"
+    parseJSON _          = fail "Expected ExampleObject as JSON object"
 
 exampleObj :: ExampleObject
 exampleObj = ExampleObject 42 "foo"
@@ -131,7 +131,12 @@ routes = [("/test", method GET $ writeText html)
          ,("/getsess/:k", do Just k <- fmap T.decodeUtf8 <$> getParam "k"
                              Just r <- with sess $ getFromSession k
                              writeText r)
-         ,("/json", writeJSON $ exampleObj)
+         ,("/json", writeJSON exampleObj)
+         ,("/postJson", do
+                          Just (ExampleObject i t) <- parseJsonBody
+                          writeJSON $ ExampleObject (i + 1)
+                                                    (t `T.append` "!")
+                          )
          ]
 
 app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
@@ -155,8 +160,8 @@ instance Factory App Foo FooFields where
                            eval (newFoo s "const")
 
 tests :: MVar (Map Int Foo) -> MVar () -> Spec
-tests store mvar =
-  snap (route routes) (app store mvar) $ do
+tests store' mvar =
+  snap (route routes) (app store' mvar) $ do
     describe "requests" $ do
       it "should match selector from a GET request" $ do
         p <- get "/test"
@@ -171,14 +176,17 @@ tests store mvar =
       it "should post parameters" $ do
         post "/params" (params [("q", "hello")]) >>= shouldHaveText "POST hello"
         post "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
+      it "should post json" $ do
+        Json raw <- postJson "/postJson" exampleObj
+        Just (ExampleObject 43 "foo!") `shouldEqual` decode raw
       it "should not match <html> on PUT request" $
         put "/test" M.empty >>= shouldNotHaveText "<html>"
       it "should put parameters" $ do
         put "/params" (params [("q", "hello")]) >>= shouldHaveText "PUT hello"
         put "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
       it "basic equality" $ do
-        eval (return 1) >>= shouldEqual 1
-        shouldNotEqual 1 2
+        eval (return 1) >>= shouldEqual (1::Integer)
+        shouldNotEqual 1 (2::Integer)
       it "status code 200" $ do
         get "/test" >>= should200
         get "/invalid_url" >>= shouldNot200
@@ -202,9 +210,9 @@ tests store mvar =
       after (\_ -> void $ tryTakeMVar mvar) $
         it "should reflect stateful in handler" $ do
          eval isE >>= shouldEqual True
-         post "/setmv" M.empty
+         void $ post "/setmv" M.empty
          eval isE >>= shouldEqual False
-         post "/setmv" M.empty
+         void $ post "/setmv" M.empty
          eval isE >>= shouldEqual False
          eval (use mv >>= \m -> void $ liftIO $ tryTakeMVar m)
       it "cleans up" $ eval isE >>= shouldEqual True
@@ -216,11 +224,11 @@ tests store mvar =
         form (ErrorPaths ["a"]) testForm (M.fromList [("a", ""), ("b", "bar")])
         form (ErrorPaths ["a"]) testForm (M.fromList [("b", "bar")])
         form (ErrorPaths ["a"]) testForm (M.fromList [])
-      it "should call predicates on valid data" $ do
+      it "should call predicates on valid data" $
         form (Predicate (("oo" `T.isInfixOf`) . fst)) testForm (M.fromList [("a", "foobar")])
     describe "sessions" $ do
       it "should be able to modify session in handlers" $
-        recordSession $ do get "/setsess/4"
+        recordSession $ do void $ get "/setsess/4"
                            sessionShouldContain "4"
                            sessionShouldContain "bar"
       it "should be able to modify session with eval" $
@@ -228,13 +236,13 @@ tests store mvar =
                            sessionShouldContain "foozlo"
                            sessionShouldContain "bar"
       it "should be able to persist sessions between requests" $
-        recordSession $ do get "/setsess/3"
+        recordSession $ do void $ get "/setsess/3"
                            get "/getsess/3" >>= shouldHaveText "bar"
       it "should be able to persist sessions between eval and requests" $
         recordSession $ do eval (with sess $ setInSession "2" "bar" >> commitSession)
                            get "/getsess/2" >>= shouldHaveText "bar"
       it "should be able to persist sessions between requests and eval" $
-        recordSession $ do get "/setsess/1"
+        recordSession $ do void $ get "/setsess/1"
                            eval (with sess $ getFromSession "1" ) >>= shouldEqual (Just "bar")
       it "should be able to persist sessions between eval and eval" $
         recordSession $ do eval (with sess $ setInSession "foofoo" "bar" >> commitSession)
@@ -250,10 +258,10 @@ tests store mvar =
            Just (Foo _ _ s) <- eval (lookupFoo i)
            s `shouldEqual` "const"
       it "should be able to modify defaulted values" $
-        do (Foo _ s _) <- create (\_ -> FooFields (return "Hi!"))
-           s `shouldEqual` "Hi!"
-           (Foo _ s _) <- create id
-           s `shouldNotEqual` "Hi!"
+        do (Foo _ s' _) <- create (\_ -> FooFields (return "Hi!"))
+           s' `shouldEqual` "Hi!"
+           (Foo _ s'' _) <- create id
+           s'' `shouldNotEqual` "Hi!"
 
 
 ----------------------------------------------------------
@@ -262,5 +270,5 @@ tests store mvar =
 main :: IO ()
 main = do
   mvar <- newEmptyMVar
-  store <- newMVar M.empty
-  hspec (tests store mvar)
+  store' <- newMVar M.empty
+  hspec (tests store' mvar)
