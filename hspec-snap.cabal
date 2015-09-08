@@ -23,8 +23,8 @@ library
                  , bytestring               >= 0.9      && < 0.11
                  , containers               >= 0.4      && < 0.6
                  , digestive-functors       >= 0.7      && < 0.9
-                 , hspec                    >= 2.0      && < 2.3
-                 , hspec-core               >= 2.0      && < 2.3
+                 , hspec                    >= 2.2      && < 2.3
+                 , hspec-core               >= 2.2      && < 2.3
                  , hxt                      >= 9.3      && < 9.4
                  , HandsomeSoup             >= 0.3      && < 0.5
                  , lens                     >= 3.10     && < 5
@@ -45,8 +45,8 @@ Test-Suite test-hspec-snap
                  , bytestring               >= 0.9      && < 0.11
                  , containers               >= 0.4      && < 0.6
                  , digestive-functors       >= 0.7      && < 0.9
-                 , hspec                    >= 2.0      && < 2.3
-                 , hspec-core               >= 2.0      && < 2.3
+                 , hspec                    >= 2.2      && < 2.3
+                 , hspec-core               >= 2.2      && < 2.3
                  , hxt                      >= 9.3      && < 9.4
                  , HandsomeSoup             >= 0.3      && < 0.5
                  , lens                     >= 3.10     && < 5
