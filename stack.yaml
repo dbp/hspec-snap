@@ -1,0 +1,9 @@
+flags: {}
+packages:
+- '.'
+extra-deps:
+- hspec-2.2.0
+- hspec-core-2.2.0
+- hspec-expectations-0.7.2
+- hspec-discover-2.2.0
+resolver: lts-2.17
