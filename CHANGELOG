@@ -1,3 +1,5 @@
+1.0.0.0 - 2015-10-?? - Upgrade to snap 1.0
+
 0.4.0.0 - 2015-10-7 - Add response codes to responses.
 
 0.3.3.1 - 2015-9-8 - Upgrade to hspec 2.2 (this is breaking, so we require it).
