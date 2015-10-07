@@ -177,7 +177,8 @@ tests store' mvar =
         post "/params" (params [("q", "hello")]) >>= shouldHaveText "POST hello"
         post "/params" (params [("r", "hello")]) >>= shouldNotHaveText "hello"
       it "should post json" $ do
-        Json raw <- postJson "/postJson" exampleObj
+        resp@(Json _ raw) <- postJson "/postJson" exampleObj
+        should200 resp
         Just (ExampleObject 43 "foo!") `shouldEqual` decode raw
       it "should not match <html> on PUT request" $
         put "/test" M.empty >>= shouldNotHaveText "<html>"
@@ -201,9 +202,9 @@ tests store' mvar =
         get "/redirect" >>= shouldNot300To "/redirect"
         get "/test" >>= shouldNot300To "/redirect"
       it "differentiates between response content types" $ do
-        Json raw <- get "/json"
+        Json _ raw <- get "/json"
         Just exampleObj `shouldEqual` decode raw
-        Html doc <- get "/test"
+        Html _ doc <- get "/test"
         doc `shouldEqual` html
     describe "stateful changes" $ do
       let isE = use mv >>= \m -> liftIO $ isEmptyMVar m

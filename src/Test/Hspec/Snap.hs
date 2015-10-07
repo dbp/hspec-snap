@@ -1,13 +1,14 @@
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE DataKinds                                                     #-}
+{-# LANGUAGE FlexibleContexts                                              #-}
+{-# LANGUAGE FlexibleInstances                                             #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving                                    #-}
+{-# LANGUAGE FunctionalDependencies                                        #-}
+{-# LANGUAGE MultiParamTypeClasses                                         #-}
+{-# LANGUAGE OverloadedStrings                                             #-}
+{-# LANGUAGE ScopedTypeVariables                                           #-}
+{-# LANGUAGE TupleSections                                                 #-}
+{-# LANGUAGE TypeFamilies                                                  #-}
+{-# LANGUAGE TypeSynonymInstances                                          #-}
 
 module Test.Hspec.Snap (
   -- * Running blocks of hspec-snap tests
@@ -114,14 +115,18 @@ import qualified Text.Digestive          as DF
 import qualified Text.HandsomeSoup       as HS
 import qualified Text.XML.HXT.Core       as HXT
 
+-- derives Num and Ord to avoid excessive newtype wrapping and unwrapping
+-- in pattern matching, etc.
+newtype RespCode = RespCode Int deriving (Show, Read, Eq, Num, Ord)
+
 -- | The result of making requests against your application. Most
 -- assertions act against these types (for example, `should200`,
 -- `shouldHaveSelector`, etc).
-data TestResponse = Html Text
-                  | Json LBS.ByteString
+data TestResponse = Html RespCode Text
+                  | Json RespCode LBS.ByteString
                   | NotFound
-                  | Redirect Int Text
-                  | Other Int
+                  | Redirect RespCode Text
+                  | Other RespCode
                   | Empty
                   deriving (Show, Eq)
 
@@ -315,10 +320,10 @@ put' path mime params' = runRequest $ do
 -- | Restricts a response to matches for a given CSS selector.
 -- Does nothing to non-Html responses.
 restrictResponse :: Text -> TestResponse -> TestResponse
-restrictResponse selector (Html body) =
+restrictResponse selector (Html code body) =
   case HXT.runLA (HXT.xshow $ HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body) of
-    [] -> Html ""
-    matches -> Html (T.concat (map T.pack matches))
+    [] -> Html code ""
+    matches -> Html code (T.concat (map T.pack matches))
 restrictResponse _ r = r
 
 -- | Runs an arbitrary stateful action from your application.
@@ -383,13 +388,14 @@ shouldNotBeTrue True = setResult (Fail Nothing "Value should have been True.")
 
 -- | Asserts that the response is a success (either Html, or Other with status 200).
 should200 :: TestResponse -> SnapHspecM b ()
-should200 (Html _) = setResult Success
-should200 (Other 200) = setResult Success
+should200 (Html _ _)   = setResult Success
+should200 (Json 200 _) = setResult Success
+should200 (Other 200)  = setResult Success
 should200 r = setResult (Fail Nothing (show r))
 
 -- | Asserts that the response is not a normal 200.
 shouldNot200 :: TestResponse -> SnapHspecM b ()
-shouldNot200 (Html _) = setResult (Fail Nothing "Got Html back.")
+shouldNot200 (Html _ _) = setResult (Fail Nothing "Got Html back.")
 shouldNot200 (Other 200) = setResult (Fail Nothing "Got Other with 200 back.")
 shouldNot200 _ = setResult Success
 
@@ -428,7 +434,7 @@ shouldNot300To _ _ = setResult Success
 
 -- | Assert that a response (which should be Html) has a given selector.
 shouldHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
-shouldHaveSelector selector r@(Html body) =
+shouldHaveSelector selector r@(Html _ body) =
   setResult $ if haveSelector' selector r
                 then Success
                 else Fail Nothing msg
@@ -437,7 +443,7 @@ shouldHaveSelector match _ = setResult (Fail Nothing (T.unpack $ T.concat ["Non-
 
 -- | Assert that a response (which should be Html) doesn't have a given selector.
 shouldNotHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
-shouldNotHaveSelector selector r@(Html body) =
+shouldNotHaveSelector selector r@(Html _ body) =
   setResult $ if haveSelector' selector r
                 then Fail Nothing msg
                 else Success
@@ -445,7 +451,7 @@ shouldNotHaveSelector selector r@(Html body) =
 shouldNotHaveSelector _ _ = setResult Success
 
 haveSelector' :: Text -> TestResponse -> Bool
-haveSelector' selector (Html body) =
+haveSelector' selector (Html _ body) =
   case HXT.runLA (HXT.hread HXT.>>> HS.css (T.unpack selector)) (T.unpack body)  of
     [] -> False
     _ -> True
@@ -453,7 +459,7 @@ haveSelector' _ _ = False
 
 -- | Asserts that the response (which should be Html) contains the given text.
 shouldHaveText :: Text -> TestResponse -> SnapHspecM b ()
-shouldHaveText match (Html body) =
+shouldHaveText match (Html _ body) =
   if T.isInfixOf match body
   then setResult Success
   else setResult (Fail Nothing $ T.unpack $ T.concat [body, "' contains '", match, "'."])
@@ -461,7 +467,7 @@ shouldHaveText match _ = setResult (Fail Nothing (T.unpack $ T.concat ["Body con
 
 -- | Asserts that the response (which should be Html) does not contain the given text.
 shouldNotHaveText :: Text -> TestResponse -> SnapHspecM b ()
-shouldNotHaveText match (Html body) =
+shouldNotHaveText match (Html _ body) =
   if T.isInfixOf match body
   then setResult (Fail Nothing $ T.unpack $ T.concat [body, "' contains '", match, "'."])
   else setResult Success
@@ -520,23 +526,27 @@ runRequest req = do
   case res of
     Left err ->
       error $ T.unpack err
-    Right response ->
-      case rspStatus response of
+    Right response -> let respCode = respStatus response in
+      case respCode of
         404 -> return NotFound
         200 ->
           liftIO $ parse200 response
-        _ -> if rspStatus response >= 300 && rspStatus response < 400
+        _ -> if respCode >= 300 && respCode < 400
                 then do let url = fromMaybe "" $ getHeader "Location" response
-                        return (Redirect (rspStatus response) (T.decodeUtf8 url))
-                else return (Other (rspStatus response))
+                        return (Redirect respCode (T.decodeUtf8 url))
+                else return (Other respCode)
+
+respStatus :: Response -> RespCode
+respStatus = RespCode . rspStatus
+
 
 parse200 :: Response -> IO TestResponse
 parse200 resp =
     let body        = getResponseBody resp
         contentType = getHeader "content-type" resp in
     case contentType of
-      Just "application/json" -> Json . fromStrict <$> body
-      _                       -> Html . T.decodeUtf8 <$> body
+      Just "application/json" -> Json 200 . fromStrict <$> body
+      _                       -> Html 200 . T.decodeUtf8 <$> body
 
 -- | Runs a request against a given handler (often the whole site),
 -- with the given state. Returns any triggered exception, or the response.
