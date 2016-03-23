@@ -20,6 +20,7 @@ module Test.Hspec.Snap (
 
   -- * Core data types
   , TestResponse(..)
+  , RespCode(..)
   , SnapHspecM
 
   -- * Factory style test data generation
