@@ -1,9 +1,21 @@
 flags: {}
 packages:
 - '.'
+- 'deps/snap/deps/io-streams'
+- 'deps/snap/deps/io-streams-haproxy'
+- 'deps/snap/deps/snap-core'
+- 'deps/snap/deps/snap-server'
+- 'deps/snap/deps/xmlhtml'
+- 'deps/snap/deps/heist'
+- 'deps/snap'
 extra-deps:
 - hspec-2.2.0
 - hspec-core-2.2.0
 - hspec-expectations-0.7.2
 - hspec-discover-2.2.0
+- http-common-0.8.2.0
+- http-streams-0.8.3.3
+- readable-0.3.1
+- test-framework-smallcheck-0.2
+- openssl-streams-1.2.1.0
 resolver: lts-2.17
