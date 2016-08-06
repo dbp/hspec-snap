@@ -142,7 +142,7 @@ routes = [("/test", method GET $ writeText html)
 app :: MVar (Map Int Foo) -> MVar () -> SnapletInit App App
 app state mvar = makeSnaplet "app" "An snaplet example application." Nothing $ do
    addRoutes routes
-   s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" (Just 3600)
+   s <- nestSnaplet "sess" sess $ initCookieSessionManager "site_key.txt" "sess" Nothing (Just 3600)
    Snap.onUnload (do e <- doesFileExist "site_key.txt"
                      when e $ removeFile "site_key.txt")
    return (App mvar state s)
