@@ -18,6 +18,8 @@ extra-deps:
 - map-syntax-0.2.0.1
 - snap-server-1.0.0.0
 - xmlhtml-0.2.3.5
+- io-streams-1.3.5.0
 - io-streams-haproxy-1.0.0.0
+- clock-0.7.1
 
 resolver: lts-2.17
