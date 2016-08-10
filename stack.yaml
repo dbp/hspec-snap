@@ -22,5 +22,6 @@ extra-deps:
 - io-streams-haproxy-1.0.0.0
 - clock-0.7.1
 - errors-2.1.2
+- unexceptionalio-0.3.0
 
 resolver: lts-2.17
