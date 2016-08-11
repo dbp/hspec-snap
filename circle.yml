@@ -7,7 +7,7 @@ dependencies:
     - cd /tmp && tar xvzf stack.tar.gz
     - sudo mv /tmp/stack-0.1.5.0-x86_64-linux/stack /usr/bin
     - sudo chmod +x /usr/bin/stack
-    - cd ~/hspec-snap && git submodule update --init --recursive
+    - cd ~/hspec-snap
   override:
     - stack setup --resolver lts-2.17
     - stack setup --resolver lts-3.4
