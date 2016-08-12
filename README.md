@@ -1,22 +1,3 @@
-## Installation
-
-Until `snap-1.0` is released, install it via git submodules:
-
-```bash
-cd path/to/hspec-snap
-git submodule update --init --recursive
-```
-
-If you are using stack, you should be all set. If you are using cabal sandboxes, run the following:
-
-```
-./init-sandbox.sh
-cabal install --only-dep --enable-tests
-cabal build
-```
-
-If you are using `hspec-snap` as part of a project that already depends on `snap-1.0`, the above isn't necessary.
-
 ## About
 
 `hspec-snap` is a library to allow you to write tests against Snap web
