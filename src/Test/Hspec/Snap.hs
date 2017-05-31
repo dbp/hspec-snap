@@ -270,14 +270,14 @@ sessionShouldContain t =
   do contents <- sessContents
      if t `T.isInfixOf` contents
        then setResult Success
-       else setResult (Fail Nothing $ "Session did not contain: " ++ T.unpack t
+       else setResult (Failure Nothing $ Reason $ "Session did not contain: " ++ T.unpack t
                                     ++ "\n\nSession was:\n" ++ T.unpack contents)
 
 sessionShouldNotContain :: Text -> SnapHspecM b ()
 sessionShouldNotContain t =
   do contents <- sessContents
      if t `T.isInfixOf` contents
-       then setResult (Fail Nothing $ "Session should not have contained: " ++ T.unpack t
+       then setResult (Failure Nothing $ Reason $ "Session should not have contained: " ++ T.unpack t
                                     ++ "\n\nSession was:\n" ++ T.unpack contents)
        else setResult Success
 
@@ -364,7 +364,7 @@ shouldEqual :: (Show a, Eq a)
             -> SnapHspecM b ()
 shouldEqual a b = if a == b
                       then setResult Success
-                      else setResult (Fail Nothing ("Should have held: " ++ show a ++ " == " ++ show b))
+                      else setResult (Failure Nothing $ Reason ("Should have held: " ++ show a ++ " == " ++ show b))
 
 -- | Asserts that two values are not equal.
 shouldNotEqual :: (Show a, Eq a)
@@ -372,65 +372,65 @@ shouldNotEqual :: (Show a, Eq a)
                -> a
                -> SnapHspecM b ()
 shouldNotEqual a b = if a == b
-                         then setResult (Fail Nothing ("Should not have held: " ++ show a ++ " == " ++ show b))
+                         then setResult (Failure Nothing $ Reason ("Should not have held: " ++ show a ++ " == " ++ show b))
                          else setResult Success
 
 -- | Asserts that the value is True.
 shouldBeTrue :: Bool
              -> SnapHspecM b ()
 shouldBeTrue True = setResult Success
-shouldBeTrue False = setResult (Fail Nothing "Value should have been True.")
+shouldBeTrue False = setResult (Failure Nothing $ Reason "Value should have been True.")
 
 -- | Asserts that the value is not True (otherwise known as False).
 shouldNotBeTrue :: Bool
                  -> SnapHspecM b ()
 shouldNotBeTrue False = setResult Success
-shouldNotBeTrue True = setResult (Fail Nothing "Value should have been True.")
+shouldNotBeTrue True = setResult (Failure Nothing $ Reason "Value should have been True.")
 
 -- | Asserts that the response is a success (either Html, or Other with status 200).
 should200 :: TestResponse -> SnapHspecM b ()
 should200 (Html _ _)   = setResult Success
 should200 (Json 200 _) = setResult Success
 should200 (Other 200)  = setResult Success
-should200 r = setResult (Fail Nothing (show r))
+should200 r = setResult (Failure Nothing $ Reason (show r))
 
 -- | Asserts that the response is not a normal 200.
 shouldNot200 :: TestResponse -> SnapHspecM b ()
-shouldNot200 (Html _ _) = setResult (Fail Nothing "Got Html back.")
-shouldNot200 (Other 200) = setResult (Fail Nothing "Got Other with 200 back.")
+shouldNot200 (Html _ _) = setResult (Failure Nothing $ Reason "Got Html back.")
+shouldNot200 (Other 200) = setResult (Failure Nothing $ Reason "Got Other with 200 back.")
 shouldNot200 _ = setResult Success
 
 -- | Asserts that the response is a NotFound.
 should404 :: TestResponse -> SnapHspecM b ()
 should404 NotFound = setResult Success
-should404 r = setResult (Fail Nothing (show r))
+should404 r = setResult (Failure Nothing $ Reason (show r))
 
 -- | Asserts that the response is not a NotFound.
 shouldNot404 :: TestResponse -> SnapHspecM b ()
-shouldNot404 NotFound = setResult (Fail Nothing "Got NotFound back.")
+shouldNot404 NotFound = setResult (Failure Nothing $ Reason "Got NotFound back.")
 shouldNot404 _ = setResult Success
 
 -- | Asserts that the response is a redirect.
 should300 :: TestResponse -> SnapHspecM b ()
 should300 (Redirect _ _) = setResult Success
-should300 r = setResult (Fail Nothing (show r))
+should300 r = setResult (Failure Nothing $ Reason (show r))
 
 -- | Asserts that the response is not a redirect.
 shouldNot300 :: TestResponse -> SnapHspecM b ()
-shouldNot300 (Redirect _ _) = setResult (Fail Nothing "Got Redirect back.")
+shouldNot300 (Redirect _ _) = setResult (Failure Nothing $ Reason "Got Redirect back.")
 shouldNot300 _ = setResult Success
 
 -- | Asserts that the response is a redirect, and thet the url it
 -- redirects to starts with the given path.
 should300To :: Text -> TestResponse -> SnapHspecM b ()
 should300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult Success
-should300To _ r = setResult (Fail Nothing (show r))
+should300To _ r = setResult (Failure Nothing $ Reason (show r))
 
 -- | Asserts that the response is not a redirect to a given path. Note
 -- that it can still be a redirect for this assertion to succeed, the
 -- path it redirects to just can't start with the given path.
 shouldNot300To :: Text -> TestResponse -> SnapHspecM b ()
-shouldNot300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult (Fail Nothing "Got Redirect back.")
+shouldNot300To pth (Redirect _ to) | pth `T.isPrefixOf` to = setResult (Failure Nothing $ Reason "Got Redirect back.")
 shouldNot300To _ _ = setResult Success
 
 -- | Assert that a response (which should be Html) has a given selector.
@@ -438,15 +438,15 @@ shouldHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
 shouldHaveSelector selector r@(Html _ body) =
   setResult $ if haveSelector' selector r
                 then Success
-                else Fail Nothing msg
+                else Failure Nothing $ Reason msg
   where msg = T.unpack $ T.concat ["Html should have contained selector: ", selector, "\n\n", body]
-shouldHaveSelector match _ = setResult (Fail Nothing (T.unpack $ T.concat ["Non-HTML body should have contained css selector: ", match]))
+shouldHaveSelector match _ = setResult (Failure Nothing $ Reason (T.unpack $ T.concat ["Non-HTML body should have contained css selector: ", match]))
 
 -- | Assert that a response (which should be Html) doesn't have a given selector.
 shouldNotHaveSelector :: Text -> TestResponse -> SnapHspecM b ()
 shouldNotHaveSelector selector r@(Html _ body) =
   setResult $ if haveSelector' selector r
-                then Fail Nothing msg
+                then Failure Nothing $ Reason msg
                 else Success
   where msg = T.unpack $ T.concat ["Html should not have contained selector: ", selector, "\n\n", body]
 shouldNotHaveSelector _ _ = setResult Success
@@ -463,14 +463,14 @@ shouldHaveText :: Text -> TestResponse -> SnapHspecM b ()
 shouldHaveText match (Html _ body) =
   if T.isInfixOf match body
   then setResult Success
-  else setResult (Fail Nothing $ T.unpack $ T.concat [body, "' contains '", match, "'."])
-shouldHaveText match _ = setResult (Fail Nothing (T.unpack $ T.concat ["Body contains: ", match]))
+  else setResult (Failure Nothing $ Reason $ T.unpack $ T.concat [body, "' contains '", match, "'."])
+shouldHaveText match _ = setResult (Failure Nothing $ Reason (T.unpack $ T.concat ["Body contains: ", match]))
 
 -- | Asserts that the response (which should be Html) does not contain the given text.
 shouldNotHaveText :: Text -> TestResponse -> SnapHspecM b ()
 shouldNotHaveText match (Html _ body) =
   if T.isInfixOf match body
-  then setResult (Fail Nothing $ T.unpack $ T.concat [body, "' contains '", match, "'."])
+  then setResult (Failure Nothing $ Reason $ T.unpack $ T.concat [body, "' contains '", match, "'."])
   else setResult Success
 shouldNotHaveText _ _ = setResult Success
 
@@ -493,12 +493,12 @@ form expected theForm theParams =
        Value a -> shouldEqual (snd r) (Just a)
        Predicate f ->
          case snd r of
-           Nothing -> setResult (Fail Nothing $ T.unpack $
+           Nothing -> setResult (Failure Nothing $ Reason $ T.unpack $
                                  T.append "Expected form to validate. Resulted in errors: "
                                           (T.pack (show $ DF.viewErrors $ fst r)))
            Just v -> if f v
                        then setResult Success
-                       else setResult (Fail Nothing $ T.unpack $
+                       else setResult (Failure Nothing $ Reason $ T.unpack $
                                        T.append "Expected predicate to pass on value: "
                                                 (T.pack (show v)))
        ErrorPaths expectedPaths ->
@@ -506,11 +506,11 @@ form expected theForm theParams =
             if all (`elem` viewErrorPaths) expectedPaths
                then if length viewErrorPaths == length expectedPaths
                        then setResult Success
-                       else setResult (Fail Nothing $ "Number of errors did not match test. Got:\n\n "
+                       else setResult (Failure Nothing $ Reason $ "Number of errors did not match test. Got:\n\n "
                                             ++ show viewErrorPaths
                                             ++ "\n\nBut expected:\n\n"
                                             ++ show expectedPaths)
-               else setResult (Fail Nothing $ "Did not have all errors specified. Got:\n\n"
+               else setResult (Failure Nothing $ Reason $ "Did not have all errors specified. Got:\n\n"
                                     ++ show viewErrorPaths
                                     ++ "\n\nBut expected:\n\n"
                                     ++ show expectedPaths)
