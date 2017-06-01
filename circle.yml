@@ -8,10 +8,12 @@ dependencies:
     - tar -xvzf /tmp/stack.tar.gz -C /tmp/stack/
     - sudo mv /tmp/stack/stack-1.4.0-linux-x86_64/stack /usr/bin/stack
   override:
-    - stack setup
+    - stack setup --resolver lts-6.33
+    - stack setup --resolver lts-8.14
+    - stack build --resolver lts-6.33
     - stack build --resolver lts-8.14
-
 
 test:
   override:
+    - stack test hspec-snap --resolver lts-6.33
     - stack test hspec-snap --resolver lts-8.14
