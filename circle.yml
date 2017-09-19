@@ -10,10 +10,13 @@ dependencies:
   override:
     - stack setup --resolver lts-6.33
     - stack setup --resolver lts-8.14
+    - stack setup --resolver nightly-2017-09-17
     - stack build --resolver lts-6.33
     - stack build --resolver lts-8.14
+    - stack build --resolver nightly-2017-09-17
 
 test:
   override:
     - stack test hspec-snap --resolver lts-6.33
     - stack test hspec-snap --resolver lts-8.14
+    - stack test hspec-snap --resolver nightly-2017-09-17
