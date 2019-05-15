@@ -18,13 +18,13 @@ library
   exposed-modules:
         Test.Hspec.Snap
   hs-source-dirs:  src
-  build-depends:   base                     >= 4.6      && < 4.12
-                 , aeson                    >= 0.6      && < 1.4
+  build-depends:   base                     >= 4.6      && < 4.13
+                 , aeson                    >= 0.6      && < 1.5
                  , bytestring               >= 0.9      && < 0.11
-                 , containers               >= 0.4      && < 0.6
+                 , containers               >= 0.4      && < 0.7
                  , digestive-functors       >= 0.7      && < 0.9
-                 , hspec                    >= 2.2      && < 2.6
-                 , hspec-core               >= 2.2      && < 2.6
+                 , hspec                    >= 2.2      && < 2.8
+                 , hspec-core               >= 2.2      && < 2.8
                  , HUnit                    >= 1.5      && < 1.7
                  , hxt                      >= 9.3      && < 9.4
                  , HandsomeSoup             >= 0.3      && < 0.5
