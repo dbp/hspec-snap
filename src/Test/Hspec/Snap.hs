@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                                                           #-}
 {-# LANGUAGE DataKinds                                                     #-}
 {-# LANGUAGE FlexibleContexts                                              #-}
 {-# LANGUAGE FlexibleInstances                                             #-}
@@ -148,7 +149,12 @@ type SnapHspecM b = StateT (SnapHspecState b) IO
 -- > Session state
 -- > Before handler (runs before each eval)
 -- > After handler (runs after each eval).
-data SnapHspecState b = SnapHspecState Result
+data SnapHspecState b = SnapHspecState
+#if MIN_VERSION_hspec(2,5,0)
+                                       ResultStatus
+#else
+                                       Result
+#endif
                                        (Handler b b ())
                                        (Snaplet b)
                                        (InitializerState b)
@@ -163,7 +169,12 @@ instance Example (SnapHspecM b ()) where
     do mv <- newEmptyMVar
        cb $ \st -> do ((),SnapHspecState r' _ _ _ _ _ _) <- runStateT s st
                       putMVar mv r'
+#if MIN_VERSION_hspec(2,5,0)
+       rs <- takeMVar mv
+       return $ Result "" rs
+#else
        takeMVar mv
+#endif
 
 -- | Factory instances allow you to easily generate test data.
 --
@@ -338,7 +349,11 @@ eval act = do (SnapHspecState _ _site app is _mv bef aft) <- S.get
 
 -- | Records a test Success or Fail. Only the first Fail will be
 -- recorded (and will cause the whole block to Fail).
+#if MIN_VERSION_hspec(2,5,0)
+setResult :: ResultStatus -> SnapHspecM b ()
+#else
 setResult :: Result -> SnapHspecM b ()
+#endif
 setResult r = do (SnapHspecState r' s a i sess bef aft) <- S.get
                  case r' of
                    Success -> S.put (SnapHspecState r s a i sess bef aft)
