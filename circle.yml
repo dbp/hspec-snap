@@ -3,17 +3,20 @@ dependencies:
     - "~/.stack"
     - "~/hspec-snap/.stack-work"
   pre:
-    - wget https://github.com/commercialhaskell/stack/releases/download/v1.4.0/stack-1.4.0-linux-x86_64.tar.gz -O /tmp/stack.tar.gz
+    - wget https://github.com/commercialhaskell/stack/releases/download/v1.5.1/stack-1.5.1-linux-x86_64.tar.gz -O /tmp/stack.tar.gz
     - mkdir /tmp/stack/
     - tar -xvzf /tmp/stack.tar.gz -C /tmp/stack/
-    - sudo mv /tmp/stack/stack-1.4.0-linux-x86_64/stack /usr/bin/stack
+    - sudo mv /tmp/stack/stack-1.5.1-linux-x86_64/stack /usr/bin/stack
   override:
     - stack setup --resolver lts-6.33
     - stack setup --resolver lts-8.14
+    - stack setup --resolver nightly-2017-09-17
     - stack build --resolver lts-6.33
     - stack build --resolver lts-8.14
+    - stack build --resolver nightly-2017-09-17
 
 test:
   override:
     - stack test hspec-snap --resolver lts-6.33
     - stack test hspec-snap --resolver lts-8.14
+    - stack test hspec-snap --resolver nightly-2017-09-17
