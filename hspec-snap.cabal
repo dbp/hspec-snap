@@ -1,5 +1,5 @@
 name:                hspec-snap
-version:             1.0.0.2
+version:             1.0.1.0
 synopsis:            A library for testing with Hspec and the Snap Web Framework
 homepage:            https://github.com/dbp/hspec-snap
 license:             BSD3
