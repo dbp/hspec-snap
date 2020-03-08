@@ -1,3 +1,5 @@
+1.0.2.0 - 2020-03-05 - Support ghc-8.8.2
+
 1.0.1.0 - 2019-05-22 - Support hspec-2.2 through hspec-2.7
 
 1.0.0.0 - 2016-08-06 - Upgrade to snap 1.0
